@@ -65,7 +65,19 @@ Two methods, chosen per stage via the `auth-method` input of the
    ```
 4. **Never commit `server.key`.** `.gitignore` blocks `*.key`/`*.pem` as a backstop.
 
-## 5. Secrets (per GitHub Environment)
+## 5. Secrets
+
+Secrets exist at **two levels** with the same values:
+
+- **Repository-level, org-key-prefixed** (`INT_SF_AUTH_URL`, `UAT_SF_AUTH_URL`,
+  `PROD_SF_CLIENT_ID`, `PROD_SF_JWT_KEY`, `PROD_SF_USERNAME`,
+  `PROD_SF_INSTANCE_URL`) — used by **PR validation** jobs. These must NOT be
+  environment-scoped: environment secrets would trigger the environment's
+  required-reviewer gate on every PR validation.
+- **Environment-level, unprefixed** (below) — used by **deploy** jobs, which run
+  inside the environment and are gated by its required reviewers.
+
+### Environment-level (per GitHub Environment)
 
 In each Environment (Settings → Environments → <env> → Add secret):
 

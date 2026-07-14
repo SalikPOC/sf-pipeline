@@ -82,3 +82,7 @@ Node ESM scripts with `node --test` units · composite action
   (Spring '26 restriction) and ECA JWT setup isn't metadata-deployable, so
   integration/uat use `sf org login sfdx-url` with an SF_AUTH_URL environment
   secret, refreshed on scratch-org recreation. sf-auth action supports both.
+- 2026-07-14: Secrets exist at two levels: repo-level org-prefixed (INT_/UAT_/PROD_)
+  for PR validation jobs, environment-level unprefixed for deploy jobs — because
+  environment secrets would trigger required-reviewer approval on every PR
+  validation (docs/SETUP.md §5).
