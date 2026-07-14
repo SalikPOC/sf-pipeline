@@ -199,11 +199,10 @@ jobs:
             FROM="${PAIR%%:*}"; TO="${PAIR##*:}"
             if [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --base "$TO" --head "$FROM" --state open --json number --jq length)" = "0" ]; then
               gh label create back-promotion --repo "$GITHUB_REPOSITORY" --color 0e8a16 2>/dev/null || true
+              BODY=$(printf 'Automated sync after a production deploy so lower stages do not drift.\n\nWork-Items: POC-0')
               gh pr create --repo "$GITHUB_REPOSITORY" --base "$TO" --head "$FROM" \
                 --title "Back-promotion: sync $TO with $FROM (POC-0)" \
                 --label back-promotion \
-                --body "Automated sync after a production deploy so lower stages don't drift.
-
-Work-Items: POC-0" || echo "no diff between $FROM and $TO"
+                --body "$BODY" || echo "no diff between $FROM and $TO"
             fi
           done
