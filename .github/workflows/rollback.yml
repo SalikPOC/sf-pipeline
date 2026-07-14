@@ -83,12 +83,6 @@ jobs:
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: debug secret resolution
-        run: |
-          echo "org=[${{ needs.context.outputs.org }}]"
-          echo "format_key=[${{ format('{0}_SF_AUTH_URL', needs.context.outputs.org) }}]"
-          echo "format_lookup_empty=${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] == '' }}"
-          echo "int_direct_empty=${{ secrets.INT_SF_AUTH_URL == '' }}"
       - uses: ./.github/actions/sf-auth
         with:
           auth-method: ${{ needs.context.outputs.auth_method }}
@@ -120,12 +114,6 @@ jobs:
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: debug secret resolution
-        run: |
-          echo "org=[${{ needs.context.outputs.org }}]"
-          echo "format_key=[${{ format('{0}_SF_AUTH_URL', needs.context.outputs.org) }}]"
-          echo "format_lookup_empty=${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] == '' }}"
-          echo "int_direct_empty=${{ secrets.INT_SF_AUTH_URL == '' }}"
       - uses: ./.github/actions/sf-auth
         with:
           auth-method: ${{ needs.context.outputs.auth_method }}
