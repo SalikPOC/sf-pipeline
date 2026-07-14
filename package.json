@@ -5,7 +5,8 @@
   "description": "OrbitOps Salesforce CI/CD pipeline — SFDX project + GitHub Actions workflows",
   "scripts": {
     "config:validate": "node scripts/validate-pipeline-config.mjs",
-    "test": "node --test \"scripts/**/*.test.mjs\""
+    "test": "node --test \"scripts/**/*.test.mjs\"",
+    "scan:baseline": "sf code-analyzer run --workspace force-app --config-file code-analyzer.yml --output-file /tmp/full.sarif && node scripts/scanner/baseline.mjs /tmp/full.sarif --out .orbitops/scanner-baseline.json"
   },
   "devDependencies": {
     "ajv": "^8.17.1",

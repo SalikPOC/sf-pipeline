@@ -86,6 +86,60 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
         run: node scripts/workitems/check.mjs --title "$PR_TITLE" --branch "$HEAD_REF" --commits-file commits.json
 
+  scan:
+    name: Code scan
+    needs: context
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/sf-auth
+        with: { auth-method: none }
+      - name: Collect changed files
+        id: files
+        run: |
+          git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD" -- force-app > changed.txt
+          COUNT=$(grep -c . changed.txt || true)
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Changed files ($COUNT):"; cat changed.txt
+      - name: Scan changed files
+        if: steps.files.outputs.count != '0'
+        run: |
+          WORKSPACE_ARGS=()
+          while IFS= read -r f; do [ -n "$f" ] && WORKSPACE_ARGS+=(--workspace "$f"); done < changed.txt
+          sf code-analyzer run "${WORKSPACE_ARGS[@]}" --config-file code-analyzer.yml --output-file results.sarif
+      - name: Upload SARIF to code scanning
+        if: steps.files.outputs.count != '0'
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
+        with:
+          sarif_file: results.sarif
+          category: orbitops-scanner
+      - name: Severity gate
+        id: gate
+        run: |
+          GATE_FAILED=0
+          node scripts/scanner/gate.mjs results.sarif "${{ needs.context.outputs.scanner_max_severity }}" \
+            --baseline .orbitops/scanner-baseline.json --out scan-summary.md || GATE_FAILED=1
+          { echo "<!-- orbitops:scan -->"; cat scan-summary.md; } > scan-comment.md
+          cat scan-summary.md >> "$GITHUB_STEP_SUMMARY"
+          echo "failed=$GATE_FAILED" >> "$GITHUB_OUTPUT"
+      - name: Post scan comment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/comments/sticky.mjs "<!-- orbitops:scan -->" scan-comment.md
+      - name: Enforce gate
+        if: steps.gate.outputs.failed == '1'
+        run: |
+          echo "New findings at or above the blocking severity — see the scan comment on the PR."
+          exit 1
+
   validate:
     name: Validate against target org
     needs: [context, delta]

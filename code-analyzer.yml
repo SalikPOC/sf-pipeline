@@ -1,0 +1,24 @@
+# Salesforce Code Analyzer v5 configuration (used by `sf code-analyzer run`).
+# Engines: PMD + AppExchange rules (Apex), ESLint (LWC/Aura JS), RetireJS
+# (vulnerable JS libs), Flow scanner, regex. Rule selection defaults to the
+# "Recommended" selector; per-stage blocking is enforced by
+# scripts/scanner/gate.mjs against .orbitops/pipeline.yml gates.
+config_root: null
+log_folder: null
+
+rules: {}
+
+engines:
+  pmd:
+    disable_engine: false
+  eslint:
+    disable_engine: false
+  retire-js:
+    disable_engine: false
+  flow:
+    disable_engine: false
+  regex:
+    disable_engine: false
+  cpd:
+    # Copy-paste detection is noisy for metadata-heavy repos; enable per-project if wanted.
+    disable_engine: true
