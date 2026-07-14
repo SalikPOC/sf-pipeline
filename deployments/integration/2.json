@@ -1,0 +1,22 @@
+{
+  "type": "deploy",
+  "env": "integration",
+  "seq": 2,
+  "sha": "a853364d2dd6e69a269e3a70284daf33ecd86f6a",
+  "workItems": [
+    "POC-1"
+  ],
+  "components": {
+    "CustomField": [
+      "BUP_Clinic__c.Notes__c"
+    ]
+  },
+  "destructive": {},
+  "componentCount": 1,
+  "destructiveCount": 0,
+  "runUrl": "https://github.com/SalikPOC/sf-pipeline/actions/runs/29341317335",
+  "actor": "SalikPOC",
+  "timestamp": "2026-07-14T14:33:43Z",
+  "reason": "",
+  "mode": "delta"
+}
