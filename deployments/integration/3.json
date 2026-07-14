@@ -1,0 +1,22 @@
+{
+  "type": "rollback",
+  "env": "integration",
+  "seq": 3,
+  "sha": "d1bb59cb6664f82fb5ea52a4e928f39a87b39a3f",
+  "workItems": [],
+  "components": {},
+  "destructive": {
+    "CustomField": [
+      "BUP_Clinic__c.Notes__c"
+    ]
+  },
+  "componentCount": 0,
+  "destructiveCount": 1,
+  "runUrl": "https://github.com/SalikPOC/sf-pipeline/actions/runs/29359744789",
+  "actor": "SalikPOC",
+  "timestamp": "2026-07-14T18:56:00Z",
+  "rolledBackFrom": 2,
+  "rolledBackTo": 1,
+  "reason": "Phase 6 live test — destructive rollback removing Notes field",
+  "includeDestructive": true
+}
