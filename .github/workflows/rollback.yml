@@ -1,6 +1,11 @@
 # OrbitOps rollback (REQUIREMENTS.md epic E5). Reverse-delta between deploy tags,
 # validate-first, destructive changes opt-in, forward revert commit (never
 # force-push). Triggered from the UI (or manually) via workflow_dispatch.
+#
+# Two jobs: `preview` (no environment, always runs — safety check + validate) and
+# `execute` (environment-gated, runs only when mode=execute — performs the
+# rollback). Splitting them keeps preview freely runnable while the reviewer gate
+# still guards execution. Both auth via repo-level org-prefixed secrets.
 name: OrbitOps Rollback
 
 on:
@@ -65,11 +70,10 @@ jobs:
       - id: stage
         run: node scripts/context/resolve-stage.mjs "${{ steps.map.outputs.branch }}"
 
-  rollback:
-    name: Rollback ${{ inputs.env }} (${{ inputs.mode }})
+  preview:
+    name: Rollback preview (${{ inputs.env }})
     needs: context
     runs-on: ubuntu-latest
-    environment: ${{ inputs.mode == 'execute' && needs.context.outputs.environment || '' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -79,9 +83,6 @@ jobs:
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      # Repo-level org-prefixed secrets so preview mode (no environment context)
-      # can still authenticate; the execute-mode reviewer gate is enforced by the
-      # job-level `environment:` above, independently of which secrets are read.
       - uses: ./.github/actions/sf-auth
         with:
           auth-method: ${{ needs.context.outputs.auth_method }}
@@ -91,119 +92,48 @@ jobs:
           instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', needs.context.outputs.org)] }}
           auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] }}
           alias: target-org
+      - name: Reverse delta + safety analysis + validate
+        run: bash scripts/rollback/preview.sh
+        env:
+          ROLLBACK_ENV: ${{ inputs.env }}
+          TARGET_SEQ: ${{ inputs.target_seq }}
+          INCLUDE_DESTRUCTIVE: ${{ inputs.include_destructive }}
 
-      - name: Resolve rollback refs
-        id: refs
-        run: |
-          ENV="${{ inputs.env }}"
-          node -e "
-            const {resolveRollbackRefs}=await import('./scripts/rollback/refs.mjs');
-            const {execSync}=await import('node:child_process');
-            const tags=execSync('git tag -l \"deploy/${ENV}/*\"').toString().split('\n').filter(Boolean);
-            const r=resolveRollbackRefs(tags,'${ENV}','${{ inputs.target_seq }}');
-            const out=process.env.GITHUB_OUTPUT;
-            require('fs').appendFileSync(out,
-              \`current_tag=\${r.currentTag}\ntarget_tag=\${r.targetTag}\nnew_seq=\${r.newSeq}\nnew_tag=\${r.newTag}\ncurrent=\${r.current}\`+'\n');
-            console.log('Rolling back '+r.currentTag+' -> '+r.targetTag+' (new '+r.newTag+')');
-          " --input-type=module
-
-      - name: Compute reverse delta
-        run: |
-          mkdir -p reverse-delta
-          sf sgd source delta \
-            --from "${{ steps.refs.outputs.current_tag }}" \
-            --to "${{ steps.refs.outputs.target_tag }}" \
-            --output-dir reverse-delta
-
-      - name: Safety analysis + preview
-        run: |
-          node scripts/rollback/analyze.mjs reverse-delta \
-            --env "${{ inputs.env }}" --from "${{ steps.refs.outputs.current }}" --to "${{ inputs.target_seq }}" \
-            --include-destructive "${{ inputs.include_destructive }}" \
-            --out-md preview.md --out-json safety.json
-          cat preview.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Validate rollback against org
-        id: validate
-        run: |
-          DESTRUCTIVE_ARGS=()
-          if [ "${{ inputs.include_destructive }}" = "true" ] && \
-             [ -f reverse-delta/destructiveChanges/destructiveChanges.xml ] && \
-             grep -q "<members>" reverse-delta/destructiveChanges/destructiveChanges.xml; then
-            DESTRUCTIVE_ARGS=(--post-destructive-changes reverse-delta/destructiveChanges/destructiveChanges.xml)
-          fi
-          # NoTestRun -> dry-run (validate rejects NoTestRun); else validate for a quick-deployable check
-          sf project deploy start --dry-run --ignore-conflicts \
-            --manifest reverse-delta/package/package.xml \
-            "${DESTRUCTIVE_ARGS[@]}" \
-            --test-level NoTestRun --target-org target-org --wait 60 --json > validate.json || true
-          node scripts/deploy/parse-validate-result.mjs validate.json --errors verrors.md
-          echo "DESTRUCTIVE_ENABLED=${#DESTRUCTIVE_ARGS[@]}" >> "$GITHUB_ENV"
-
-      - name: Stop here (preview mode)
-        if: inputs.mode == 'preview'
-        run: |
-          echo "Preview complete. Re-run with mode=execute to perform the rollback." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Execute rollback deploy
-        if: inputs.mode == 'execute'
-        run: |
-          DESTRUCTIVE_ARGS=()
-          if [ "$DESTRUCTIVE_ENABLED" != "0" ]; then
-            DESTRUCTIVE_ARGS=(--post-destructive-changes reverse-delta/destructiveChanges/destructiveChanges.xml)
-          fi
-          sf project deploy start --ignore-conflicts \
-            --manifest reverse-delta/package/package.xml \
-            "${DESTRUCTIVE_ARGS[@]}" \
-            --test-level NoTestRun --target-org target-org --wait 60 --json > deploy.json || true
-          node scripts/deploy/parse-validate-result.mjs deploy.json --errors derrors.md
-
-      - name: Forward revert commit + tag + manifest
-        if: inputs.mode == 'execute'
-        run: |
-          git config user.name "orbitops-bot"
-          git config user.email "orbitops-bot@users.noreply.github.com"
-          ENV="${{ inputs.env }}"
-          BRANCH="${{ needs.context.outputs.branch }}"
-          TARGET="${{ steps.refs.outputs.target_tag }}"
-          CURRENT="${{ steps.refs.outputs.current_tag }}"
-          # Branch force-app -> target state (restores changed components, removes added-after-target).
-          git checkout "$TARGET" -- force-app
-          if [ "${{ inputs.include_destructive }}" != "true" ]; then
-            # Keep components added after target (org kept them): restore their current-tag versions.
-            git diff --name-only --diff-filter=A "$TARGET" "$CURRENT" -- force-app | while read -r f; do
-              [ -n "$f" ] && git checkout "$CURRENT" -- "$f"
-            done
-          fi
-          git add -A force-app
-          git commit -q \
-            -m "Roll back $ENV to seq ${{ inputs.target_seq }}" \
-            -m "Reason: ${{ inputs.reason }}" \
-            -m "Rolled back from ${CURRENT} to ${TARGET}." \
-            -m "Work-Items: POC-0"
-          git push -q origin "HEAD:$BRANCH"
-          # New deploy tag on the revert commit + rollback manifest on orbitops-meta
-          NEW_TAG="${{ steps.refs.outputs.new_tag }}"
-          git tag -a "$NEW_TAG" -m "OrbitOps rollback: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          git push -q origin "$NEW_TAG"
-          node scripts/deploy/manifest.mjs --env "$ENV" --seq "${{ steps.refs.outputs.new_seq }}" \
-            --sha "$(git rev-parse HEAD)" --delta-dir reverse-delta \
-            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            --actor "$GITHUB_ACTOR" --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --type rollback \
-            --extra "{\"rolledBackFrom\": ${{ steps.refs.outputs.current }}, \"rolledBackTo\": ${{ inputs.target_seq }}, \"reason\": ${{ toJSON(inputs.reason) }}, \"includeDestructive\": ${{ inputs.include_destructive }}}" \
-            --out manifest.json
-          for attempt in 1 2 3; do
-            git fetch -q origin orbitops-meta 2>/dev/null || true
-            if git show-ref -q refs/remotes/origin/orbitops-meta; then
-              git worktree add -q .meta origin/orbitops-meta
-            else
-              git worktree add -q --detach .meta && git -C .meta checkout -q --orphan orbitops-meta && git -C .meta rm -rfq . 2>/dev/null || true
-            fi
-            mkdir -p ".meta/deployments/${ENV}"
-            cp manifest.json ".meta/deployments/${ENV}/${{ steps.refs.outputs.new_seq }}.json"
-            git -C .meta add -A && git -C .meta commit -q -m "Record rollback $NEW_TAG"
-            if git -C .meta push -q origin HEAD:orbitops-meta; then git worktree remove -f .meta; break; fi
-            git worktree remove -f .meta; echo "meta race, retry $attempt"
-          done
-          node scripts/workitems/post-deployment.mjs manifest.json --status rolled-back || true
-          echo "✅ Rolled back $ENV to seq ${{ inputs.target_seq }} — new state $NEW_TAG" >> "$GITHUB_STEP_SUMMARY"
+  execute:
+    name: Rollback execute (${{ inputs.env }})
+    needs: context
+    if: inputs.mode == 'execute'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.context.outputs.environment }} # reviewer gate on execute
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ needs.context.outputs.branch }}
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/sf-auth
+        with:
+          auth-method: ${{ needs.context.outputs.auth_method }}
+          client-id: ${{ secrets[format('{0}_SF_CLIENT_ID', needs.context.outputs.org)] }}
+          username: ${{ secrets[format('{0}_SF_USERNAME', needs.context.outputs.org)] }}
+          jwt-key: ${{ secrets[format('{0}_SF_JWT_KEY', needs.context.outputs.org)] }}
+          instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', needs.context.outputs.org)] }}
+          auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] }}
+          alias: target-org
+      - name: Reverse delta + safety analysis + validate
+        run: bash scripts/rollback/preview.sh
+        env:
+          ROLLBACK_ENV: ${{ inputs.env }}
+          TARGET_SEQ: ${{ inputs.target_seq }}
+          INCLUDE_DESTRUCTIVE: ${{ inputs.include_destructive }}
+      - name: Execute rollback
+        run: bash scripts/rollback/execute.sh
+        env:
+          ROLLBACK_ENV: ${{ inputs.env }}
+          TARGET_SEQ: ${{ inputs.target_seq }}
+          INCLUDE_DESTRUCTIVE: ${{ inputs.include_destructive }}
+          REASON: ${{ inputs.reason }}
+          BRANCH: ${{ needs.context.outputs.branch }}
