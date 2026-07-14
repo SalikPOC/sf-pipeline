@@ -4,18 +4,19 @@
 # (sourceable) and reverse-delta/ for execute.sh to reuse.
 set -euo pipefail
 
-node -e "
+node --input-type=module -e "
   const {resolveRollbackRefs}=await import('./scripts/rollback/refs.mjs');
   const {execSync}=await import('node:child_process');
+  const {writeFileSync}=await import('node:fs');
   const tags=execSync('git tag -l \"deploy/${ROLLBACK_ENV}/*\"').toString().split('\n').filter(Boolean);
   const r=resolveRollbackRefs(tags,'${ROLLBACK_ENV}','${TARGET_SEQ}');
   const lines=[
     'CURRENT_TAG='+r.currentTag, 'TARGET_TAG='+r.targetTag,
     'CURRENT_SEQ='+r.current, 'NEW_SEQ='+r.newSeq, 'NEW_TAG='+r.newTag,
   ].join('\n')+'\n';
-  require('fs').writeFileSync('rollback-refs.env', lines);
+  writeFileSync('rollback-refs.env', lines);
   console.log('Rolling back '+r.currentTag+' -> '+r.targetTag+' (new '+r.newTag+')');
-" --input-type=module
+"
 # shellcheck disable=SC1091
 source rollback-refs.env
 
