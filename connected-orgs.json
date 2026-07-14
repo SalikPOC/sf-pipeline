@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Dev1",
+    "org": "DEV_DEV1",
+    "authMethod": "sfdx-url",
+    "connectedBy": "SalikPOC",
+    "connectedAt": "2026-07-14T23:59:02.109Z",
+    "instanceHost": "fun-platform-7050-dev-ed.scratch.my.salesforce.com"
+  }
+]
