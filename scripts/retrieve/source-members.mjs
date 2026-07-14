@@ -19,6 +19,9 @@ const ALLOWED_TYPES = new Set([
   "PathAssistant", "GlobalValueSet", "StandardValueSet", "CustomLabel", "CustomLabels",
 ]);
 
+// Wildcard-unfriendly types (folder-based or named-only) excluded in fallback mode.
+const NO_WILDCARD = new Set(["EmailTemplate", "StandardValueSet", "CustomLabels"]);
+
 const flag = (n, d = null) => {
   const i = process.argv.indexOf(`--${n}`);
   return i > -1 ? process.argv[i + 1] : d;
@@ -26,13 +29,38 @@ const flag = (n, d = null) => {
 const org = flag("org");
 const out = flag("out", "retrieve-package.xml");
 
-const raw = execFileSync(
-  "sf",
-  ["data", "query", "--use-tooling-api", "-o", org, "--json", "-q",
-   "SELECT MemberType, MemberName FROM SourceMember WHERE IsNameObsolete = false ORDER BY MemberType, MemberName"],
-  { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
-);
-const records = JSON.parse(raw).result?.records ?? [];
+let records = null; // null = org has no source tracking → wildcard fallback
+try {
+  const raw = execFileSync(
+    "sf",
+    ["data", "query", "--use-tooling-api", "-o", org, "--json", "-q",
+     "SELECT MemberType, MemberName FROM SourceMember WHERE IsNameObsolete = false ORDER BY MemberType, MemberName"],
+    { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
+  );
+  records = JSON.parse(raw).result?.records ?? [];
+} catch (err) {
+  const msg = String(err.stdout ?? err.message ?? "");
+  if (!/sObject type 'SourceMember' is not supported|INVALID_TYPE/i.test(msg)) throw err;
+  // No source tracking (Developer Edition / regular sandbox): retrieve every
+  // citizen-safe type wholesale — the git diff downstream keeps only real changes.
+  console.log(`${org} has no source tracking — falling back to retrieve-by-type (git filters the rest).`);
+}
+
+if (records === null) {
+  const types = [...ALLOWED_TYPES].filter((t) => !NO_WILDCARD.has(t)).sort();
+  const typesXml = types
+    .map((t) => `    <types>\n        <members>*</members>\n        <name>${t}</name>\n    </types>`)
+    .join("\n");
+  writeFileSync(
+    out,
+    `<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n${typesXml}\n    <version>64.0</version>\n</Package>\n`
+  );
+  if (flag("json")) {
+    writeFileSync(flag("json"), JSON.stringify({ total: types.length, mode: "wildcard", components: {}, skipped: [] }, null, 2));
+  }
+  console.log(`Wildcard manifest written for ${types.length} metadata types.`);
+  process.exit(0);
+}
 
 const byType = new Map();
 const skipped = [];
