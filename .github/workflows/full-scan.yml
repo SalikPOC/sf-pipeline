@@ -27,8 +27,13 @@ jobs:
       - uses: ./.github/actions/sf-auth
         with: { auth-method: none }
       - name: Scan full workspace
-        run: sf code-analyzer run --workspace force-app --config-file code-analyzer.yml --output-file results.sarif
+        id: scan
+        run: |
+          sf code-analyzer run --workspace force-app --config-file code-analyzer.yml --output-file results.sarif
+          HAS_RUNS=$(node -pe 'JSON.parse(require("fs").readFileSync("results.sarif","utf8")).runs?.length > 0' 2>/dev/null || echo false)
+          echo "has_runs=$HAS_RUNS" >> "$GITHUB_OUTPUT"
       - name: Upload SARIF to code scanning
+        if: steps.scan.outputs.has_runs == 'true'
         uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: results.sarif

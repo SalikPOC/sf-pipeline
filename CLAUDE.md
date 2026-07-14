@@ -86,3 +86,9 @@ Node ESM scripts with `node --test` units · composite action
   for PR validation jobs, environment-level unprefixed for deploy jobs — because
   environment secrets would trigger required-reviewer approval on every PR
   validation (docs/SETUP.md §5).
+- 2026-07-14: Scanner findings surface as a sticky PR comment table + SARIF to
+  GitHub code scanning, NOT inline review comments (deviation from BUILD_PROMPTS
+  Phase 3 — diff-position mapping wasn't worth PoC complexity). Gate blocks on
+  NEW findings (vs .orbitops/scanner-baseline.json, rule+file ±5 lines) with
+  severity ≤ the stage's scannerMaxSeverity. SARIF uploads are skipped when the
+  scan produces zero runs (code scanning API rejects empty SARIF).
