@@ -4,12 +4,16 @@ pipeline:
   - branch: integration
     org: INT
     environment: integration
+    authMethod: sfdx-url
+    testLevel: Conditional # NoTestRun unless the delta contains Apex, then RunLocalTests
     gates:
       scannerMaxSeverity: 3
       minCoverage: 0
   - branch: uat
     org: UAT
     environment: uat
+    authMethod: sfdx-url
+    testLevel: RunLocalTests
     gates:
       scannerMaxSeverity: 2
       minCoverage: 75
@@ -17,8 +21,10 @@ pipeline:
   - branch: main
     org: PROD
     environment: production
+    authMethod: jwt
+    testLevel: RunLocalTests
     gates:
       scannerMaxSeverity: 2
       minCoverage: 80
       requiredReviewers: true
-      # workItemStatus: ["Ready for Release"]  # post-PoC gate — requires live tracker connection
+      # workItemStatus: ["Ready for Release"]   # post-PoC gate — requires live tracker connection

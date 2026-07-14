@@ -1,0 +1,178 @@
+# OrbitOps PR validation — runs on every promotion PR (REQUIREMENTS.md epic E3).
+# Thin YAML: all logic lives in scripts/** (unit-tested with node --test).
+name: OrbitOps
+
+on:
+  pull_request:
+    branches: [integration, uat, main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  context:
+    name: Resolve stage
+    runs-on: ubuntu-latest
+    outputs:
+      org: ${{ steps.stage.outputs.org }}
+      environment: ${{ steps.stage.outputs.environment }}
+      auth_method: ${{ steps.stage.outputs.auth_method }}
+      test_level: ${{ steps.stage.outputs.test_level }}
+      min_coverage: ${{ steps.stage.outputs.min_coverage }}
+      scanner_max_severity: ${{ steps.stage.outputs.scanner_max_severity }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - id: stage
+        run: node scripts/context/resolve-stage.mjs "${{ github.base_ref }}"
+
+  delta:
+    name: What will deploy
+    needs: context
+    runs-on: ubuntu-latest
+    outputs:
+      empty: ${{ steps.render.outputs.empty }}
+      has_apex: ${{ steps.render.outputs.has_apex }}
+      destructive_count: ${{ steps.render.outputs.destructive_count }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/sf-auth
+        with: { auth-method: none }
+      - name: Compute delta package
+        run: |
+          mkdir -p deploy-package
+          sf sgd source delta --from "origin/${{ github.base_ref }}" --to "HEAD" --output-dir deploy-package
+      - name: Render deploy preview
+        id: render
+        run: node scripts/delta/render-comment.mjs deploy-package --out deploy-package/comment.md
+      - name: Post sticky comment
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/comments/sticky.mjs "<!-- orbitops:deploy-preview -->" deploy-package/comment.md
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: deploy-package
+          path: deploy-package/
+
+  work-items:
+    name: Work items
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Collect PR commit messages
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/commits" \
+            --paginate --jq '[.[].commit.message]' > commits.json
+      - name: Check work-item tagging
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: node scripts/workitems/check.mjs --title "$PR_TITLE" --branch "$HEAD_REF" --commits-file commits.json
+
+  validate:
+    name: Validate against target org
+    needs: [context, delta]
+    if: needs.delta.outputs.empty != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      succeeded: ${{ steps.parse.outputs.succeeded }}
+      validation_id: ${{ steps.parse.outputs.validation_id }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/sf-auth
+        with:
+          auth-method: ${{ needs.context.outputs.auth_method }}
+          client-id: ${{ secrets[format('{0}_SF_CLIENT_ID', needs.context.outputs.org)] }}
+          username: ${{ secrets[format('{0}_SF_USERNAME', needs.context.outputs.org)] }}
+          jwt-key: ${{ secrets[format('{0}_SF_JWT_KEY', needs.context.outputs.org)] }}
+          instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', needs.context.outputs.org)] }}
+          auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] }}
+          alias: target-org
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: deploy-package
+          path: deploy-package/
+      - name: Check-only deploy
+        run: |
+          TEST_LEVEL="${{ needs.context.outputs.test_level }}"
+          if [ "$TEST_LEVEL" = "Conditional" ]; then
+            if [ "${{ needs.delta.outputs.has_apex }}" = "true" ]; then TEST_LEVEL=RunLocalTests; else TEST_LEVEL=NoTestRun; fi
+          fi
+          DESTRUCTIVE_ARGS=()
+          if [ "${{ needs.delta.outputs.destructive_count }}" != "0" ]; then
+            DESTRUCTIVE_ARGS=(--post-destructive-changes deploy-package/destructiveChanges/destructiveChanges.xml)
+          fi
+          echo "Validating with test level: $TEST_LEVEL"
+          sf project deploy validate \
+            --manifest deploy-package/package/package.xml \
+            "${DESTRUCTIVE_ARGS[@]}" \
+            --test-level "$TEST_LEVEL" \
+            --target-org target-org \
+            --wait 60 --json > validate-result.json || true
+      - name: Parse result
+        id: parse
+        run: |
+          VALIDATE_FAILED=0
+          node scripts/deploy/parse-validate-result.mjs validate-result.json \
+            --quickdeploy quickdeploy.json --coverage coverage.json --errors errors.md || VALIDATE_FAILED=1
+          if [ -f errors.md ]; then
+            { echo "<!-- orbitops:validate-errors -->"; cat errors.md; } > errors-comment.md
+          else
+            printf '<!-- orbitops:validate-errors -->\n## ✅ Validation succeeded against %s\n' "${{ needs.context.outputs.org }}" > errors-comment.md
+          fi
+          exit "$VALIDATE_FAILED"
+      - name: Post validation status comment
+        if: always()
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/comments/sticky.mjs "<!-- orbitops:validate-errors -->" errors-comment.md
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        if: always()
+        with:
+          name: validation-output
+          path: |
+            quickdeploy.json
+            coverage.json
+          if-no-files-found: ignore
+
+  coverage:
+    name: Coverage gate
+    needs: [context, delta, validate]
+    if: needs.delta.outputs.empty != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: validation-output
+      - name: Enforce minimum coverage
+        run: |
+          if [ ! -f coverage.json ]; then
+            echo '{"overall": null, "perClass": []}' > coverage.json
+          fi
+          node scripts/deploy/check-coverage.mjs coverage.json "${{ needs.context.outputs.min_coverage }}" --summary gate.md
+          cat gate.md >> "$GITHUB_STEP_SUMMARY"

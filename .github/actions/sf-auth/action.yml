@@ -9,7 +9,7 @@ description: >
 
 inputs:
   auth-method:
-    description: '"jwt" or "sfdx-url"'
+    description: '"jwt", "sfdx-url", or "none" (install CLI + plugins only, no org auth)'
     required: false
     default: "jwt"
   # jwt method
@@ -95,6 +95,9 @@ runs:
               --sfdx-url-file "$TMPFILE" \
               --alias "${{ inputs.alias }}" \
               --set-default
+            ;;
+          none)
+            echo "CLI + plugins installed; skipping org auth (auth-method: none)"
             ;;
           *)
             echo "Unknown auth-method: $SF_AUTH_METHOD" >&2; exit 1
