@@ -36,10 +36,31 @@ if [ "$INCLUDE_DESTRUCTIVE" = "true" ] && \
    grep -q "<members>" reverse-delta/destructiveChanges/destructiveChanges.xml; then
   DESTRUCTIVE_ARGS=(--post-destructive-changes reverse-delta/destructiveChanges/destructiveChanges.xml)
 fi
-if [ -s reverse-delta/package/package.xml ] && grep -q "<members>" reverse-delta/package/package.xml; then
+HAS_RESTORE=false
+grep -q "<members>" reverse-delta/package/package.xml 2>/dev/null && HAS_RESTORE=true
+HAS_DELETE=false
+[ "${#DESTRUCTIVE_ARGS[@]}" -gt 0 ] && HAS_DELETE=true
+
+# No-op rollback: nothing to restore and nothing to delete (e.g. rolling back a
+# purely-additive change with destructive disabled). Report and stop cleanly.
+if [ "$HAS_RESTORE" = false ] && [ "$HAS_DELETE" = false ]; then
+  echo "ROLLBACK_NOOP=true" >> rollback-refs.env
+  {
+    echo "## ⏮ Rollback preview — no changes needed"
+    echo ""
+    echo "Rolling back **${ROLLBACK_ENV}** to seq ${TARGET_SEQ} would change nothing:"
+    echo "no components need restoring, and components added since the target are kept"
+    echo "(destructive rollback is disabled). Enable destructive rollback to remove them."
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+  echo "No-op rollback — nothing to validate or deploy."
+  exit 0
+fi
+echo "ROLLBACK_NOOP=false" >> rollback-refs.env
+
+if [ "$HAS_RESTORE" = true ]; then
   MANIFEST_ARGS=(--manifest reverse-delta/package/package.xml)
 else
-  # Reverse delta may be pure-destructive (nothing to restore) — build an empty manifest.
+  # Pure-destructive rollback: empty package, deletions carry the operation.
   mkdir -p reverse-delta/package
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata"><version>64.0</version></Package>\n' \
     > reverse-delta/package/package.xml

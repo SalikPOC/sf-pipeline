@@ -7,6 +7,12 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source rollback-refs.env
 
+if [ "${ROLLBACK_NOOP:-false}" = "true" ]; then
+  echo "No-op rollback — nothing to execute (no tag or commit created)." \
+    >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+  exit 0
+fi
+
 # 1. Deploy reverse delta to the org.
 DESTRUCTIVE_ARGS=()
 if [ "$INCLUDE_DESTRUCTIVE" = "true" ] && \
