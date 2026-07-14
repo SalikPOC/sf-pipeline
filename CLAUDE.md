@@ -86,6 +86,17 @@ Node ESM scripts with `node --test` units · composite action
   for PR validation jobs, environment-level unprefixed for deploy jobs — because
   environment secrets would trigger required-reviewer approval on every PR
   validation (docs/SETUP.md §5).
+- 2026-07-14: Rollback design (Phase 6), learned the hard way:
+  (a) pipeline scripts ALWAYS run from the workflow ref (main), never from env-branch
+  checkouts — env branches diverge via merged rollback PRs and silently pin old code;
+  (b) `git checkout <ref> -- <path>` never deletes files absent from <ref> — `git rm`
+  the tree first or deletions vanish from revert commits;
+  (c) revert commits land via a merged PR (run-unique branch name) when branch
+  protection declines direct push — requires repo setting "Allow GitHub Actions to
+  create and approve pull requests" (user enabled);
+  (d) no-op rollbacks (nothing to restore or delete) exit cleanly without tag/commit;
+  (e) rollback shares the deploy-<env> concurrency group so it can't interleave with
+  deploys.
 - 2026-07-14: Scanner findings surface as a sticky PR comment table + SARIF to
   GitHub code scanning, NOT inline review comments (deviation from BUILD_PROMPTS
   Phase 3 — diff-position mapping wasn't worth PoC complexity). Gate blocks on
