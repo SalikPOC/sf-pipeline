@@ -79,14 +79,17 @@ jobs:
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      # Repo-level org-prefixed secrets so preview mode (no environment context)
+      # can still authenticate; the execute-mode reviewer gate is enforced by the
+      # job-level `environment:` above, independently of which secrets are read.
       - uses: ./.github/actions/sf-auth
         with:
           auth-method: ${{ needs.context.outputs.auth_method }}
-          client-id: ${{ secrets.SF_CLIENT_ID }}
-          username: ${{ secrets.SF_USERNAME }}
-          jwt-key: ${{ secrets.SF_JWT_KEY }}
-          instance-url: ${{ secrets.SF_INSTANCE_URL }}
-          auth-url: ${{ secrets.SF_AUTH_URL }}
+          client-id: ${{ secrets[format('{0}_SF_CLIENT_ID', needs.context.outputs.org)] }}
+          username: ${{ secrets[format('{0}_SF_USERNAME', needs.context.outputs.org)] }}
+          jwt-key: ${{ secrets[format('{0}_SF_JWT_KEY', needs.context.outputs.org)] }}
+          instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', needs.context.outputs.org)] }}
+          auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] }}
           alias: target-org
 
       - name: Resolve rollback refs
