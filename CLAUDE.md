@@ -77,3 +77,8 @@ Node ESM scripts with `node --test` units · composite action
   protection + required-reviewer environments work on the free plan). No teams on
   personal accounts → PoC role mapping is username-list based (env vars in the UI,
   usernames in CODEOWNERS); swap to team slugs when moving to an org.
+- 2026-07-14: Auth is split per stage (amends D3): PROD uses JWT via connected app
+  "OrbitOps CI" (deployed, verified). Scratch orgs can't create connected apps
+  (Spring '26 restriction) and ECA JWT setup isn't metadata-deployable, so
+  integration/uat use `sf org login sfdx-url` with an SF_AUTH_URL environment
+  secret, refreshed on scratch-org recreation. sf-auth action supports both.

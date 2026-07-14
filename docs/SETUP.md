@@ -33,10 +33,20 @@ match `environment:` values in `.orbitops/pipeline.yml`):
 | `uat` | release-managers team | |
 | `production` | release-managers team | consider also a wait timer |
 
-## 4. Connected app + JWT certificate (per org)
+## 4. Org authentication
 
-The pipeline authenticates with the JWT bearer flow: a connected app in each org
-holds a certificate; GitHub holds the matching private key as a secret.
+Two methods, chosen per stage via the `auth-method` input of the
+`.github/actions/sf-auth` composite action:
+
+- **`jwt`** (production/persistent orgs): connected app + certificate, below.
+- **`sfdx-url`** (scratch-org stages): orgs created after Salesforce's Spring '26
+  change can't create connected apps (External Client Apps' JWT flow still needs
+  UI steps, so it isn't scriptable either). Instead, store the CLI's auth URL:
+  `sf org display -o <alias> --verbose --json` → `result.sfdxAuthUrl` → secret
+  `SF_AUTH_URL` on that stage's environment. Refresh it whenever the scratch org
+  is recreated.
+
+### Connected app + JWT certificate (per persistent org)
 
 1. Generate a keypair (or run `scripts/setup/provision-connected-app.mjs` when
    available, which automates steps 1–3):
@@ -59,12 +69,20 @@ holds a certificate; GitHub holds the matching private key as a secret.
 
 In each Environment (Settings → Environments → <env> → Add secret):
 
+**JWT stages** (e.g. `production`):
+
 | Secret | Value |
 |---|---|
 | `SF_CLIENT_ID` | Connected app consumer key |
 | `SF_USERNAME` | Integration user username in that org |
 | `SF_JWT_KEY` | Full contents of `server.key` (PEM, including BEGIN/END lines) |
 | `SF_INSTANCE_URL` | `https://login.salesforce.com` (prod/dev orgs) or `https://test.salesforce.com` (sandboxes & scratch orgs) |
+
+**sfdx-url stages** (e.g. `integration`, `uat`):
+
+| Secret | Value |
+|---|---|
+| `SF_AUTH_URL` | `sf org display -o <alias> --verbose --json` → `result.sfdxAuthUrl` |
 
 Environment-level (not repo-level) secrets matter: they're only exposed to jobs
 that pass that environment's gate.

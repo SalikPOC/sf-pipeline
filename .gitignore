@@ -12,3 +12,4 @@ coverage/
 test-results/
 *.key
 *.pem
+scripts/setup/connected-app/
