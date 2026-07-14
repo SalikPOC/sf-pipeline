@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbitops.dev/schema/pipeline.schema.json",
+  "title": "OrbitOps pipeline configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pipeline"],
+  "properties": {
+    "pipeline": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["branch", "org", "environment", "gates"],
+        "properties": {
+          "branch": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Long-lived Git branch mapped to this stage"
+          },
+          "org": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "description": "Logical org key (matches the secret set / CLI alias, e.g. INT, UAT, PROD)"
+          },
+          "environment": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "GitHub Environment name guarding deploys to this stage"
+          },
+          "gates": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["scannerMaxSeverity", "minCoverage"],
+            "properties": {
+              "scannerMaxSeverity": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5,
+                "description": "Scanner findings at this severity or more severe (lower number) block promotion"
+              },
+              "minCoverage": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "Minimum Apex test coverage percentage required to promote"
+              },
+              "requiredReviewers": {
+                "type": "boolean",
+                "description": "Whether the GitHub Environment enforces required reviewers (informational; enforced in GitHub settings)"
+              },
+              "workItemStatus": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1,
+                "description": "Post-PoC: allowed tracker statuses for attached work items"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

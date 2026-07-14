@@ -1,0 +1,24 @@
+# OrbitOps pipeline definition — the single source of truth for stages and gates.
+# Edited via PR only (see CODEOWNERS). Validated by scripts/validate-pipeline-config.mjs.
+pipeline:
+  - branch: integration
+    org: INT
+    environment: integration
+    gates:
+      scannerMaxSeverity: 3
+      minCoverage: 0
+  - branch: uat
+    org: UAT
+    environment: uat
+    gates:
+      scannerMaxSeverity: 2
+      minCoverage: 75
+      requiredReviewers: true
+  - branch: main
+    org: PROD
+    environment: production
+    gates:
+      scannerMaxSeverity: 2
+      minCoverage: 80
+      requiredReviewers: true
+      # workItemStatus: ["Ready for Release"]  # post-PoC gate — requires live tracker connection

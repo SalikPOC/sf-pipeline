@@ -1,0 +1,12 @@
+{
+  "orgName": "OrbitOps INT",
+  "edition": "Developer",
+  "features": [],
+  "settings": {
+    "securitySettings": {
+      "sessionSettings": {
+        "sessionTimeout": "TwelveHours"
+      }
+    }
+  }
+}

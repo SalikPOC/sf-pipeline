@@ -1,0 +1,14 @@
+node_modules/
+.sf/
+.sfdx/
+.localdevserver/
+deploy-package/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+test-results/
+*.key
+*.pem

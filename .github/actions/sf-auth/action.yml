@@ -1,0 +1,69 @@
+name: "Salesforce CLI setup + org auth"
+description: >
+  Installs Salesforce CLI v2 with the sfdx-git-delta and code-analyzer plugins
+  (pinned versions), then authenticates to an org via the JWT bearer flow.
+  Used by every OrbitOps workflow that touches an org.
+
+inputs:
+  client-id:
+    description: "Connected app consumer key (secret SF_CLIENT_ID)"
+    required: true
+  username:
+    description: "Integration user username (secret SF_USERNAME)"
+    required: true
+  jwt-key:
+    description: "Private key PEM contents (secret SF_JWT_KEY)"
+    required: true
+  instance-url:
+    description: "Login URL: https://login.salesforce.com for prod/dev orgs, https://test.salesforce.com for sandboxes and scratch orgs (secret SF_INSTANCE_URL)"
+    required: true
+  alias:
+    description: "CLI alias to assign to the authenticated org"
+    required: false
+    default: "target-org"
+  cli-version:
+    description: "Pinned @salesforce/cli version"
+    required: false
+    default: "2.142.7"
+  sgd-version:
+    description: "Pinned sfdx-git-delta plugin version"
+    required: false
+    default: "6.45.1"
+  code-analyzer-version:
+    description: "Pinned @salesforce/plugin-code-analyzer version"
+    required: false
+    default: "5.14.0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Salesforce CLI and plugins (cached)
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v sf >/dev/null || [ "$(sf version --json | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).cliVersion' 2>/dev/null)" != "@salesforce/cli/${{ inputs.cli-version }}" ]; then
+          npm install --global "@salesforce/cli@${{ inputs.cli-version }}"
+        fi
+        echo y | sf plugins install "sfdx-git-delta@${{ inputs.sgd-version }}"
+        echo y | sf plugins install "@salesforce/plugin-code-analyzer@${{ inputs.code-analyzer-version }}"
+        sf version --verbose
+
+    - name: Authenticate via JWT
+      shell: bash
+      env:
+        SF_AUTH_CLIENT_ID: ${{ inputs.client-id }}
+        SF_AUTH_USERNAME: ${{ inputs.username }}
+        SF_AUTH_JWT_KEY: ${{ inputs.jwt-key }}
+        SF_AUTH_INSTANCE_URL: ${{ inputs.instance-url }}
+      run: |
+        set -euo pipefail
+        KEYFILE="$(mktemp)"
+        trap 'rm -f "$KEYFILE"' EXIT
+        printf '%s' "$SF_AUTH_JWT_KEY" > "$KEYFILE"
+        sf org login jwt \
+          --client-id "$SF_AUTH_CLIENT_ID" \
+          --username "$SF_AUTH_USERNAME" \
+          --jwt-key-file "$KEYFILE" \
+          --instance-url "$SF_AUTH_INSTANCE_URL" \
+          --alias "${{ inputs.alias }}" \
+          --set-default

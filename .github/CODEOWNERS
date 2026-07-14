@@ -1,0 +1,5 @@
+# Pipeline machinery and stage-gate config are owned by release managers.
+# NOTE: replace ORG_PLACEHOLDER with the GitHub org name once created.
+/.github/    @ORG_PLACEHOLDER/release-managers
+/.orbitops/  @ORG_PLACEHOLDER/release-managers
+/scripts/    @ORG_PLACEHOLDER/release-managers

@@ -1,0 +1,14 @@
+{
+  "name": "sf-pipeline",
+  "private": true,
+  "type": "module",
+  "description": "OrbitOps Salesforce CI/CD pipeline — SFDX project + GitHub Actions workflows",
+  "scripts": {
+    "config:validate": "node scripts/validate-pipeline-config.mjs",
+    "test": "node --test scripts/"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.0"
+  }
+}
