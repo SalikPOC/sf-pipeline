@@ -85,15 +85,19 @@ Current PoC mapping:
 > --duration-days 30`), redeploy the connected app and update `SF_USERNAME` in the
 > matching environment.
 
-## 7. Teams (role mapping)
+## 7. Roles (PoC: username lists)
 
-Create GitHub teams used by CODEOWNERS and the UI's role mapping:
+The repo owner `SalikPOC` is a personal account, so GitHub teams are unavailable.
+For the PoC, role mapping is by username:
 
-- `citizen-devs`
-- `release-managers` (also set as required reviewers in step 3)
-- `orbitops-admins`
+- CODEOWNERS lists usernames directly (see `.github/CODEOWNERS`)
+- Environment required reviewers: add users directly on the `uat`/`production`
+  environments
+- The UI maps roles from env vars (`ROLE_RELEASE_MANAGERS`, `ROLE_ADMINS`,
+  comma-separated usernames; everyone else authenticated = citizen dev)
 
-Then replace `ORG_PLACEHOLDER` in `.github/CODEOWNERS` with the org name.
+When moving to an org: create `citizen-devs`, `release-managers`,
+`orbitops-admins` teams and switch CODEOWNERS + UI role mapping to team slugs.
 
 ## 8. Repo settings checklist
 

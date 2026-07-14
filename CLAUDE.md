@@ -73,3 +73,7 @@ Node ESM scripts with `node --test` units · composite action
   polling only.
 - 2026-07-14: `force-app` seeded with sample objects (BUP_Clinic__c, BUP_Policies__c)
   retrieved from the original scratch orgs, so the pipeline has real metadata to move.
+- 2026-07-14: Repos live under the personal account `SalikPOC` (public, so branch
+  protection + required-reviewer environments work on the free plan). No teams on
+  personal accounts → PoC role mapping is username-list based (env vars in the UI,
+  usernames in CODEOWNERS); swap to team slugs when moving to an org.
