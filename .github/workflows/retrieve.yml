@@ -1,0 +1,120 @@
+# OrbitOps citizen workspace — "Pull my changes" (REQUIREMENTS.md E6.2).
+# Retrieves a builder's sandbox edits (via source tracking) into their
+# work-item branch as a bot commit. Dispatched by the UI.
+name: OrbitOps Retrieve
+
+on:
+  workflow_dispatch:
+    inputs:
+      work_branch:
+        description: "Work-item branch to commit retrieved changes to (feature/…)"
+        required: true
+      source_env:
+        description: "Environment whose org the builder worked in"
+        required: true
+        type: choice
+        options: [integration, uat, production]
+        default: integration
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retrieve-${{ inputs.work_branch }}
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  context:
+    name: Resolve stage
+    runs-on: ubuntu-latest
+    outputs:
+      org: ${{ steps.stage.outputs.org }}
+      auth_method: ${{ steps.stage.outputs.auth_method }}
+      branch: ${{ steps.map.outputs.branch }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - id: map
+        run: |
+          BRANCH=$(node --input-type=module -e "
+            const {loadPipeline}=await import('./scripts/lib/pipeline.mjs');
+            const s=loadPipeline().find(x=>x.environment==='${{ inputs.source_env }}');
+            if(!s){console.error('no stage for env');process.exit(1)}
+            console.log(s.branch);")
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+      - id: stage
+        run: node scripts/context/resolve-stage.mjs "${{ steps.map.outputs.branch }}"
+
+  retrieve:
+    name: Pull changes from ${{ inputs.source_env }}
+    needs: context
+    runs-on: ubuntu-latest
+    steps:
+      # Workflow ref (main) checkout — scripts stay current (Phase 6 lesson);
+      # the work branch is materialized as a worktree for the retrieve itself.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - uses: ./.github/actions/sf-auth
+        with:
+          auth-method: ${{ needs.context.outputs.auth_method }}
+          client-id: ${{ secrets[format('{0}_SF_CLIENT_ID', needs.context.outputs.org)] }}
+          username: ${{ secrets[format('{0}_SF_USERNAME', needs.context.outputs.org)] }}
+          jwt-key: ${{ secrets[format('{0}_SF_JWT_KEY', needs.context.outputs.org)] }}
+          instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', needs.context.outputs.org)] }}
+          auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', needs.context.outputs.org)] }}
+          alias: source-org
+
+      - name: Build manifest from source tracking
+        id: manifest
+        run: |
+          node scripts/retrieve/source-members.mjs --org source-org \
+            --out retrieve-package.xml --json tracked.json
+          COUNT=$(node -pe 'JSON.parse(require("fs").readFileSync("tracked.json","utf8")).total')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Retrieve into the work branch
+        if: steps.manifest.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          WB="${{ inputs.work_branch }}"
+          git fetch -q origin "$WB"
+          git worktree add -q wb "origin/$WB"
+          cp retrieve-package.xml wb/
+          (cd wb && sf project retrieve start --manifest retrieve-package.xml \
+             --target-org source-org --ignore-conflicts --wait 30 --json > retrieve-result.json) || true
+          node -e "
+            const r=JSON.parse(require('fs').readFileSync('wb/retrieve-result.json','utf8'));
+            if(r.status!==0){console.error('Retrieve failed:', r.message ?? r.result?.messages); process.exit(1)}
+            console.log('Retrieved', (r.result.files??[]).length, 'file(s)');"
+          rm -f wb/retrieve-package.xml wb/retrieve-result.json
+          cd wb
+          git config user.name "orbitops-bot"
+          git config user.email "orbitops-bot@users.noreply.github.com"
+          git add -A force-app
+          if git diff --cached --quiet; then
+            echo "No differences vs the work branch — nothing to commit." >> "$GITHUB_STEP_SUMMARY"
+          else
+            WORK_ITEM=$(echo "$WB" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+|AB#[0-9]+' | head -1 || true)
+            git commit -q \
+              -m "Pull changes from the ${{ inputs.source_env }} org" \
+              -m "Retrieved via OrbitOps for $WB." \
+              -m "Work-Items: ${WORK_ITEM:-POC-0}"
+            git push -q origin "HEAD:$WB"
+            {
+              echo "### 📥 Pulled changes from ${{ inputs.source_env }}"
+              echo ""
+              git show --stat --format="" HEAD | sed 's/^/    /'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Nothing tracked
+        if: steps.manifest.outputs.count == '0'
+        run: echo "No tracked changes found in the ${{ inputs.source_env }} org." >> "$GITHUB_STEP_SUMMARY"
