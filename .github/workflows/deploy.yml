@@ -177,6 +177,14 @@ jobs:
           done
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
+      - name: Notify work items
+        run: node scripts/workitems/post-deployment.mjs manifest.json --status deployed --out workitem-postbacks.json
+      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: workitem-postbacks
+          path: workitem-postbacks.json
+          if-no-files-found: ignore
+
       - name: Mark deployment status
         if: always()
         run: |
