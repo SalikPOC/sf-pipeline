@@ -67,3 +67,9 @@ test("no tests → overall coverage null", () => {
   assert.equal(p.overallCoverage, null);
   assert.equal(p.testsRan, 0);
 });
+
+test("CLI-level error (no result body) surfaces the message", () => {
+  const p = parseValidation({ status: 1, name: "Error", message: "Expected --test-level=NoTestRun to be one of: ..." });
+  assert.equal(p.succeeded, false);
+  assert.match(renderErrorsMarkdown(p), /Expected --test-level=NoTestRun/);
+});

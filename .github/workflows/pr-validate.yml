@@ -123,19 +123,36 @@ jobs:
           if [ "${{ needs.delta.outputs.destructive_count }}" != "0" ]; then
             DESTRUCTIVE_ARGS=(--post-destructive-changes deploy-package/destructiveChanges/destructiveChanges.xml)
           fi
-          echo "Validating with test level: $TEST_LEVEL"
-          sf project deploy validate \
-            --manifest deploy-package/package/package.xml \
-            "${DESTRUCTIVE_ARGS[@]}" \
-            --test-level "$TEST_LEVEL" \
-            --target-org target-org \
-            --wait 60 --json > validate-result.json || true
+          # `sf project deploy validate` rejects NoTestRun (validations exist to
+          # enable quick-deploys, which require tests). Use a dry-run for that case;
+          # it has identical check-only semantics but yields no quick-deploy ID.
+          if [ "$TEST_LEVEL" = "NoTestRun" ]; then
+            echo "VALIDATE_MODE=dry-run" >> "$GITHUB_ENV"
+            echo "Dry-run check-only deploy (no tests)"
+            sf project deploy start --dry-run --ignore-conflicts \
+              --manifest deploy-package/package/package.xml \
+              "${DESTRUCTIVE_ARGS[@]}" \
+              --test-level NoTestRun \
+              --target-org target-org \
+              --wait 60 --json > validate-result.json || true
+          else
+            echo "VALIDATE_MODE=validate" >> "$GITHUB_ENV"
+            echo "Validating with test level: $TEST_LEVEL"
+            sf project deploy validate \
+              --manifest deploy-package/package/package.xml \
+              "${DESTRUCTIVE_ARGS[@]}" \
+              --test-level "$TEST_LEVEL" \
+              --target-org target-org \
+              --wait 60 --json > validate-result.json || true
+          fi
       - name: Parse result
         id: parse
         run: |
+          QUICKDEPLOY_ARGS=()
+          if [ "$VALIDATE_MODE" = "validate" ]; then QUICKDEPLOY_ARGS=(--quickdeploy quickdeploy.json); fi
           VALIDATE_FAILED=0
           node scripts/deploy/parse-validate-result.mjs validate-result.json \
-            --quickdeploy quickdeploy.json --coverage coverage.json --errors errors.md || VALIDATE_FAILED=1
+            "${QUICKDEPLOY_ARGS[@]}" --coverage coverage.json --errors errors.md || VALIDATE_FAILED=1
           if [ -f errors.md ]; then
             { echo "<!-- orbitops:validate-errors -->"; cat errors.md; } > errors-comment.md
           else

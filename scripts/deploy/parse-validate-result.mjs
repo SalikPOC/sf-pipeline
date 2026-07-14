@@ -39,6 +39,7 @@ export function parseValidation(json) {
 
   return {
     succeeded,
+    cliMessage: json.message ?? null,
     validationId: result.id ?? null,
     failures,
     testsRan: Number(test.numTestsRun ?? 0),
@@ -62,7 +63,11 @@ export function renderErrorsMarkdown(parsed) {
     for (const t of parsed.testFailures) lines.push(`- **${t.name}.${t.method}** — ${t.message}`);
   }
   if (!parsed.failures.length && !parsed.testFailures.length) {
-    lines.push("The deployment failed without component-level details — see the workflow run log.");
+    lines.push(
+      parsed.cliMessage
+        ? `The CLI reported: \`${parsed.cliMessage}\``
+        : "The deployment failed without component-level details — see the workflow run log."
+    );
   }
   return lines.join("\n");
 }
