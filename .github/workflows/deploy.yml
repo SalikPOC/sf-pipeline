@@ -137,6 +137,8 @@ jobs:
         id: record
         if: steps.range.outputs.mode == 'full' || steps.range.outputs.empty != 'true'
         run: |
+          git config user.name "orbitops-bot"
+          git config user.email "orbitops-bot@users.noreply.github.com"
           ENV="${{ needs.context.outputs.environment }}"
           SEQ=$(git tag -l "deploy/${ENV}/*" | node scripts/deploy/next-seq.mjs "$ENV")
           TAG="deploy/${ENV}/${SEQ}"
@@ -154,8 +156,6 @@ jobs:
           git tag -a "$TAG" -m "OrbitOps deploy: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           git push -q origin "$TAG"
           # commit manifest to the orbitops-meta branch (retry for cross-env races)
-          git config user.name "orbitops-bot"
-          git config user.email "orbitops-bot@users.noreply.github.com"
           for attempt in 1 2 3; do
             git fetch -q origin orbitops-meta 2>/dev/null || true
             if git show-ref -q refs/remotes/origin/orbitops-meta; then
