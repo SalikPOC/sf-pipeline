@@ -27,10 +27,14 @@ sf project deploy start --ignore-conflicts \
   --test-level NoTestRun --target-org target-org --wait 60 --json > deploy.json || true
 node scripts/deploy/parse-validate-result.mjs deploy.json --errors derrors.md
 
-# 2. Forward revert commit: branch force-app -> target state, keeping added-after-target
-#    components unless destructive was requested (so git matches org state).
+# 2. Forward revert commit: env branch's force-app -> target state, keeping
+#    added-after-target components unless destructive was requested (so git
+#    matches org state). Based on the env branch tip; scripts keep running from
+#    the workflow ref.
 git config user.name "orbitops-bot"
 git config user.email "orbitops-bot@users.noreply.github.com"
+git fetch -q origin "$BRANCH"
+git checkout -q -B orbitops-rollback-work "origin/$BRANCH"
 # `git checkout <ref> -- <path>` never DELETES files absent from <ref>; remove the
 # tree first so components added after the target are actually dropped from git.
 git rm -rq --ignore-unmatch force-app
