@@ -31,3 +31,12 @@ test("resolveOrg finds dev orgs, stage orgs, and rejects unknown keys", async ()
   assert.equal(prod.authMethod, "jwt");
   assert.throws(() => resolveOrg(cfg, "NOPE"), /Unknown org key "NOPE"/);
 });
+
+test("resolveOrg consults the connected-orgs registry", async () => {
+  const { loadConfig, resolveOrg } = await import("./pipeline.mjs");
+  const cfg = loadConfig(new URL("../../.orbitops/pipeline.yml", import.meta.url).pathname);
+  const reg = [{ name: "Jane's sandbox", org: "DEV_JANE", authMethod: "sfdx-url" }];
+  const o = resolveOrg(cfg, "DEV_JANE", reg);
+  assert.equal(o.name, "Jane's sandbox");
+  assert.throws(() => resolveOrg(cfg, "DEV_JANE"), /Unknown org key/);
+});

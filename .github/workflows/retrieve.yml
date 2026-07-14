@@ -37,7 +37,10 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - id: org
-        run: node scripts/context/resolve-org.mjs "${{ inputs.source_org }}"
+        run: |
+          git fetch -q origin orbitops-meta 2>/dev/null || true
+          git show origin/orbitops-meta:connected-orgs.json > connected-orgs.json 2>/dev/null || echo "[]" > connected-orgs.json
+          node scripts/context/resolve-org.mjs "${{ inputs.source_org }}" --registry connected-orgs.json
 
   retrieve:
     name: Pull changes from ${{ inputs.source_org }}
