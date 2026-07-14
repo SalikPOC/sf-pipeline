@@ -31,6 +31,9 @@ node scripts/deploy/parse-validate-result.mjs deploy.json --errors derrors.md
 #    components unless destructive was requested (so git matches org state).
 git config user.name "orbitops-bot"
 git config user.email "orbitops-bot@users.noreply.github.com"
+# `git checkout <ref> -- <path>` never DELETES files absent from <ref>; remove the
+# tree first so components added after the target are actually dropped from git.
+git rm -rq --ignore-unmatch force-app
 git checkout "$TARGET_TAG" -- force-app
 if [ "$INCLUDE_DESTRUCTIVE" != "true" ]; then
   git diff --name-only --diff-filter=A "$TARGET_TAG" "$CURRENT_TAG" -- force-app | while read -r f; do
