@@ -54,7 +54,8 @@ if git push origin "HEAD:$BRANCH" 2>push.err; then
   echo "Pushed revert commit directly to $BRANCH"
 else
   echo "Direct push declined (protected branch) — opening a rollback PR:"; cat push.err
-  RB_BRANCH="orbitops/rollback-${ROLLBACK_ENV}-${NEW_SEQ}"
+  # Run-unique branch avoids collisions with a leftover branch from a prior attempt.
+  RB_BRANCH="orbitops/rollback-${ROLLBACK_ENV}-${NEW_SEQ}-${GITHUB_RUN_ID}"
   git push -q origin "HEAD:$RB_BRANCH"
   gh pr create --repo "$GITHUB_REPOSITORY" --base "$BRANCH" --head "$RB_BRANCH" \
     --title "Roll back $ROLLBACK_ENV to seq ${TARGET_SEQ}" \
