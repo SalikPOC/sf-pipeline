@@ -37,6 +37,7 @@ on:
 permissions:
   contents: write
   deployments: write
+  pull-requests: write # rollback revert lands via a merged PR when the branch is protected
 
 concurrency:
   group: deploy-${{ inputs.env }} # shares the deploy lock — no rollback during a deploy

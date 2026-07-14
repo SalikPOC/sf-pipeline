@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rollback execute: deploy the reverse delta, write a forward revert commit on the
-# env branch, tag deploy/<env>/<newSeq>, and record a rollback manifest.
+# env branch (direct push, or a merged PR when the branch is protected), tag
+# deploy/<env>/<newSeq>, and record a rollback manifest. Never force-pushes.
 # Assumes preview.sh already ran in this job (reverse-delta/ + rollback-refs.env exist).
 # Env: ROLLBACK_ENV, TARGET_SEQ, INCLUDE_DESTRUCTIVE, REASON, BRANCH.
 set -euo pipefail
@@ -37,29 +38,39 @@ if [ "$INCLUDE_DESTRUCTIVE" != "true" ]; then
   done
 fi
 git add -A force-app
+COMMIT_ARGS=(-m "Roll back $ROLLBACK_ENV to seq ${TARGET_SEQ}"
+             -m "Reason: ${REASON}"
+             -m "Rolled back from ${CURRENT_TAG} to ${TARGET_TAG}."
+             -m "Work-Items: POC-0")
 if git diff --cached --quiet; then
-  echo "No git changes needed (org-only destructive rollback); creating empty marker commit."
-  git commit -q --allow-empty \
-    -m "Roll back $ROLLBACK_ENV to seq ${TARGET_SEQ}" \
-    -m "Reason: ${REASON}" \
-    -m "Rolled back from ${CURRENT_TAG} to ${TARGET_TAG}." \
-    -m "Work-Items: POC-0"
+  git commit -q --allow-empty "${COMMIT_ARGS[@]}"
 else
-  git commit -q \
-    -m "Roll back $ROLLBACK_ENV to seq ${TARGET_SEQ}" \
-    -m "Reason: ${REASON}" \
-    -m "Rolled back from ${CURRENT_TAG} to ${TARGET_TAG}." \
-    -m "Work-Items: POC-0"
+  git commit -q "${COMMIT_ARGS[@]}"
 fi
-git push -q origin "HEAD:$BRANCH"
 
-# 3. New deploy tag on the revert commit.
-git tag -a "$NEW_TAG" -m "OrbitOps rollback: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+# 3. Land the revert on the env branch: direct push, else a merged rollback PR
+#    (branch protection may require PRs; never force-push).
+if git push origin "HEAD:$BRANCH" 2>push.err; then
+  echo "Pushed revert commit directly to $BRANCH"
+else
+  echo "Direct push declined (protected branch) — opening a rollback PR:"; cat push.err
+  RB_BRANCH="orbitops/rollback-${ROLLBACK_ENV}-${NEW_SEQ}"
+  git push -q origin "HEAD:$RB_BRANCH"
+  gh pr create --repo "$GITHUB_REPOSITORY" --base "$BRANCH" --head "$RB_BRANCH" \
+    --title "Roll back $ROLLBACK_ENV to seq ${TARGET_SEQ}" \
+    --body "$(printf 'Automated rollback executed against the %s org.\n\nReason: %s\n\nWork-Items: POC-0' "$ROLLBACK_ENV" "$REASON")"
+  gh pr merge "$RB_BRANCH" --repo "$GITHUB_REPOSITORY" --merge --delete-branch
+fi
+
+# 4. Tag the resulting branch tip (works whether push was direct or via merged PR).
+git fetch -q origin "$BRANCH"
+TIP=$(git rev-parse "origin/$BRANCH")
+git tag -a "$NEW_TAG" "$TIP" -m "OrbitOps rollback: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 git push -q origin "$NEW_TAG"
 
-# 4. Rollback manifest on the orbitops-meta branch.
+# 5. Rollback manifest on the orbitops-meta branch.
 node scripts/deploy/manifest.mjs --env "$ROLLBACK_ENV" --seq "$NEW_SEQ" \
-  --sha "$(git rev-parse HEAD)" --delta-dir reverse-delta --type rollback \
+  --sha "$TIP" --delta-dir reverse-delta --type rollback \
   --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
   --actor "$GITHUB_ACTOR" --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   --extra "{\"rolledBackFrom\": ${CURRENT_SEQ}, \"rolledBackTo\": ${TARGET_SEQ}, \"reason\": \"${REASON//\"/\\\"}\", \"includeDestructive\": ${INCLUDE_DESTRUCTIVE}}" \
