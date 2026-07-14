@@ -115,7 +115,30 @@ Current PoC mapping:
 > --duration-days 30`), redeploy the connected app and update `SF_USERNAME` in the
 > matching environment.
 
-## 7. Roles (PoC: username lists)
+## 7. Registering dev orgs ("Pull my changes" sources)
+
+Builders can pull changes from any sandbox, scratch org, or dev org. To register
+one:
+
+1. Pick an org key, e.g. `DEV_JANE` (uppercase, prefixes the secrets).
+2. Authenticate to it locally, then store its credentials as **repo-level**
+   secrets: for scratch orgs/sandboxes,
+   `sf org display -o <alias> --verbose --json` → `result.sfdxAuthUrl` →
+   secret `DEV_JANE_SF_AUTH_URL`; for persistent orgs use the JWT secret set
+   (`DEV_JANE_SF_CLIENT_ID`, `_SF_USERNAME`, `_SF_JWT_KEY`, `_SF_INSTANCE_URL`).
+3. Add it to `.orbitops/pipeline.yml`:
+   ```yaml
+   devOrgs:
+     - name: "Jane's dev sandbox"
+       org: DEV_JANE
+       authMethod: sfdx-url
+   ```
+4. It appears in the UI's "Pull my changes" org picker on the next refresh.
+
+The org must have **source tracking** enabled (scratch orgs and Developer/
+Developer Pro sandboxes have it) for pulls to detect changes.
+
+## 8. Roles (PoC: username lists)
 
 The repo owner `SalikPOC` is a personal account, so GitHub teams are unavailable.
 For the PoC, role mapping is by username:
@@ -129,7 +152,7 @@ For the PoC, role mapping is by username:
 When moving to an org: create `citizen-devs`, `release-managers`,
 `orbitops-admins` teams and switch CODEOWNERS + UI role mapping to team slugs.
 
-## 8. Repo settings checklist
+## 9. Repo settings checklist
 
 - Enable secret scanning + push protection (Settings → Code security)
 - Disallow merge types other than **merge commit** (preserves Work-Items footers)

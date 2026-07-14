@@ -9,12 +9,10 @@ on:
       work_branch:
         description: "Work-item branch to commit retrieved changes to (feature/…)"
         required: true
-      source_env:
-        description: "Environment whose org the builder worked in"
+      source_org:
+        description: "Org key the builder worked in (a devOrgs entry or stage org from .orbitops/pipeline.yml)"
         required: true
-        type: choice
-        options: [integration, uat, production]
-        default: integration
+        default: INT
 
 permissions:
   contents: write
@@ -28,30 +26,21 @@ env:
 
 jobs:
   context:
-    name: Resolve stage
+    name: Resolve org
     runs-on: ubuntu-latest
     outputs:
-      org: ${{ steps.stage.outputs.org }}
-      auth_method: ${{ steps.stage.outputs.auth_method }}
-      branch: ${{ steps.map.outputs.branch }}
+      org: ${{ steps.org.outputs.org }}
+      auth_method: ${{ steps.org.outputs.auth_method }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - id: map
-        run: |
-          BRANCH=$(node --input-type=module -e "
-            const {loadPipeline}=await import('./scripts/lib/pipeline.mjs');
-            const s=loadPipeline().find(x=>x.environment==='${{ inputs.source_env }}');
-            if(!s){console.error('no stage for env');process.exit(1)}
-            console.log(s.branch);")
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-      - id: stage
-        run: node scripts/context/resolve-stage.mjs "${{ steps.map.outputs.branch }}"
+      - id: org
+        run: node scripts/context/resolve-org.mjs "${{ inputs.source_org }}"
 
   retrieve:
-    name: Pull changes from ${{ inputs.source_env }}
+    name: Pull changes from ${{ inputs.source_org }}
     needs: context
     runs-on: ubuntu-latest
     steps:
@@ -104,12 +93,12 @@ jobs:
           else
             WORK_ITEM=$(echo "$WB" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+|AB#[0-9]+' | head -1 || true)
             git commit -q \
-              -m "Pull changes from the ${{ inputs.source_env }} org" \
+              -m "Pull changes from the ${{ inputs.source_org }} org" \
               -m "Retrieved via OrbitOps for $WB." \
               -m "Work-Items: ${WORK_ITEM:-POC-0}"
             git push -q origin "HEAD:$WB"
             {
-              echo "### 📥 Pulled changes from ${{ inputs.source_env }}"
+              echo "### 📥 Pulled changes from ${{ inputs.source_org }}"
               echo ""
               git show --stat --format="" HEAD | sed 's/^/    /'
             } >> "$GITHUB_STEP_SUMMARY"
@@ -117,4 +106,4 @@ jobs:
 
       - name: Nothing tracked
         if: steps.manifest.outputs.count == '0'
-        run: echo "No tracked changes found in the ${{ inputs.source_env }} org." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "No tracked changes found in the ${{ inputs.source_org }} org." >> "$GITHUB_STEP_SUMMARY"
