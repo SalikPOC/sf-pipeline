@@ -6,5 +6,13 @@
     "connectedBy": "SalikPOC",
     "connectedAt": "2026-07-14T23:59:02.109Z",
     "instanceHost": "fun-platform-7050-dev-ed.scratch.my.salesforce.com"
+  },
+  {
+    "name": "test-kfbcxfsq6zey@example.com",
+    "org": "DEV_TEST_KFBCXFSQ6ZEY_EXAMPLE_COM",
+    "authMethod": "sfdx-url",
+    "connectedBy": "SalikPOC",
+    "connectedAt": "2026-07-15T00:05:55.963Z",
+    "instanceHost": "fun-platform-7050-dev-ed.scratch.my.salesforce.com"
   }
 ]
