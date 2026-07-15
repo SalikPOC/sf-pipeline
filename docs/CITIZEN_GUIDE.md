@@ -19,9 +19,17 @@ Salesforce's login page (OrbitOps never sees your password).
 
 ### 3. Pull my changes
 Back in your change's workspace, pick your org and click **Pull my changes**.
-A minute later your edits appear as a friendly list ("Field 'Discount' on
-Clinic — added"). Untick anything that isn't part of your work item and
-**Remove selected** — shared orgs often contain other people's edits too.
+A progress banner shows while OrbitOps fetches your work (usually a minute or
+two — there's a link to watch the details), then the list refreshes by itself:
+your edits appear in plain language ("Field 'Discount' on Clinic — added").
+Untick anything that isn't part of your work item and **Remove selected** —
+shared orgs often contain other people's edits too.
+
+**Flows get a picture, not just a line.** Any flow in your change shows a
+**Visual comparison**: your flow drawn the way Flow Builder draws it, with
+green halos on new elements, amber on changed ones, and removed ones ghosted
+in red. A sidebar lists exactly which elements differ; zoom in/out or hit
+**Expand** for a full-screen view of big flows.
 
 ### 4. Submit for promotion
 When the list looks right, **Submit for promotion**. OrbitOps starts the

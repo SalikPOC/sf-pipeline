@@ -99,6 +99,13 @@ In each Environment (Settings → Environments → <env> → Add secret):
 Environment-level (not repo-level) secrets matter: they're only exposed to jobs
 that pass that environment's gate.
 
+### Optional secrets
+
+| Secret | Level | Purpose |
+|---|---|---|
+| `NOTIFY_WEBHOOK_URL` | repo | Slack/Teams incoming-webhook URL; deploy failures post a message. Absent → silently skipped. |
+| `DEV_*_SF_AUTH_URL` | repo | Created automatically by the UI's "Connect an org" flow (§7). |
+
 ## 6. Org ↔ stage mapping
 
 `.orbitops/pipeline.yml` maps branches to logical org keys and environments.
@@ -117,8 +124,22 @@ Current PoC mapping:
 
 ## 7. Registering dev orgs ("Pull my changes" sources)
 
-Builders can pull changes from any sandbox, scratch org, or dev org. To register
-one:
+Builders can pull changes from any sandbox, scratch org, or dev org. There are
+two ways to register one:
+
+### Self-service: "Connect an org" in the UI (preferred)
+
+Settings → **Connect an org** in the OrbitOps UI. The builder signs in on
+Salesforce's own login page (OAuth authorization-code + PKCE against the
+`OrbitOps CI` connected app); the UI exchanges the code server-side, stores the
+resulting SFDX auth URL as a sealed repo secret (`DEV_<NAME>_SF_AUTH_URL`), and
+registers the org in `connected-orgs.json` on the `orbitops-meta` branch. It
+appears in the "Pull my changes" picker immediately. Requirements: the UI's
+GitHub App needs **Secrets: Read and write**, and `SF_OAUTH_CLIENT_ID` must be
+set in the UI's `.env.local` (the connected app's consumer key). Access is
+revocable any time from the org's Connected Apps OAuth Usage page.
+
+### Manual: config + secrets
 
 1. Pick an org key, e.g. `DEV_JANE` (uppercase, prefixes the secrets).
 2. Authenticate to it locally, then store its credentials as **repo-level**
@@ -135,8 +156,12 @@ one:
    ```
 4. It appears in the UI's "Pull my changes" org picker on the next refresh.
 
-The org must have **source tracking** enabled (scratch orgs and Developer/
-Developer Pro sandboxes have it) for pulls to detect changes.
+Orgs with **source tracking** (scratch orgs, Developer/Developer Pro sandboxes)
+give precise pulls — only what the builder changed. Orgs without it (Developer
+Edition, larger sandboxes) still work: the retrieve falls back to a
+wildcard-by-type manifest of citizen-safe metadata and the git diff filters out
+everything unchanged. Tracked orgs are strongly preferred for shared orgs, where
+wildcard pulls surface everyone's edits.
 
 ## 8. Roles (PoC: username lists)
 

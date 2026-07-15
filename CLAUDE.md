@@ -103,3 +103,27 @@ Node ESM scripts with `node --test` units · composite action
   NEW findings (vs .orbitops/scanner-baseline.json, rule+file ±5 lines) with
   severity ≤ the stage's scannerMaxSeverity. SARIF uploads are skipped when the
   scan produces zero runs (code scanning API rejects empty SARIF).
+- 2026-07-15: Phases 7–12 complete; UI feature set final for PoC (board, promote,
+  pull-my-changes, rollback UI, gate editor via config PRs, audit + DORA-lite
+  tiles, drift snapshots, runbook + citizen guide). Companion UI decisions in
+  orbitops-ui/CLAUDE.md.
+- 2026-07-15: Retrieve falls back to a wildcard-by-type manifest when the source
+  org lacks source tracking (SourceMember unsupported → citizen-safe types with
+  `*` members; git diff filters real changes). `--wildcard` forces it — the
+  nightly drift snapshot uses that for org-vs-branch truth.
+- 2026-07-15: Connect-an-org = OAuth authorization-code + PKCE against the one
+  "OrbitOps CI" connected app (consumer key is public; isConsumerSecretOptional).
+  `prompt=login` is kept deliberately: silent session reuse connected the *wrong*
+  org during testing. My Domain input is a fallback only — the generic
+  test/login.salesforce.com endpoints work for most orgs. Tokens are sealed as
+  repo secrets (`DEV_*_SF_AUTH_URL`) via libsodium; registry lives in
+  connected-orgs.json on orbitops-meta. Requires the GitHub App to hold
+  Secrets: write.
+- 2026-07-15: Rollback preview publishes a combined safety + validation JSON to
+  orbitops-meta/rollback-previews/<runId>.json — the UI polls the run, then
+  renders the verdict from that file (job stays green; the JSON carries pass/fail).
+- 2026-07-15: Flow visual diff learnings: auto-layout flows (Builder default)
+  store locationX/Y = 0 for every element, so the viewer computes a layered BFS
+  layout and caps it with a synthetic End card; Tailwind utility classes on SVG
+  shapes proved unreliable across build modes (unstyled rect renders black) —
+  the diagram uses explicit fill/stroke attributes only.

@@ -22,6 +22,13 @@ required reviewers; repo-level org-prefixed secrets serve validation/retrieve/
 preview (see SETUP.md §5). The UI's GitHub App additionally holds Secrets
 write (for Connect-an-org) — its private key lives only in `.env.local`.
 
+## Notifications
+
+Set a repo secret `NOTIFY_WEBHOOK_URL` (Slack/Teams incoming webhook) and
+deploy failures post a message with a link to the run. No secret → the step
+logs "skipping" and stays green. Drift findings arrive as GitHub issues
+("Drift report: <env>"), not webhooks.
+
 ## Handled failure modes (by design)
 
 - **Empty delta on deploy** → deploy + tag skipped cleanly.
