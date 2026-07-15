@@ -1,0 +1,40 @@
+{
+  "type": "deploy",
+  "env": "integration",
+  "seq": 4,
+  "sha": "588f358563adb8dd7095ee6d93cac393604a97c8",
+  "workItems": [
+    "POC-0",
+    "PROJ-123"
+  ],
+  "components": {
+    "CustomField": [
+      "Tickets__c.Contact__c",
+      "Tickets__c.Price__c"
+    ],
+    "CustomObject": [
+      "Tickets__c"
+    ],
+    "CustomTab": [
+      "Tickets__c"
+    ],
+    "Flow": [
+      "data_capture_2",
+      "Ticket_to_contact"
+    ],
+    "Layout": [
+      "Tickets__c-Tickets Layout"
+    ],
+    "ListView": [
+      "Tickets__c.All"
+    ]
+  },
+  "destructive": {},
+  "componentCount": 8,
+  "destructiveCount": 0,
+  "runUrl": "https://github.com/SalikPOC/sf-pipeline/actions/runs/29445379990",
+  "actor": "orbitops-poc-sfdcdevops[bot]",
+  "timestamp": "2026-07-15T19:42:04Z",
+  "reason": "",
+  "mode": "delta"
+}
