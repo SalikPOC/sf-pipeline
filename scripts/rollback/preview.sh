@@ -71,5 +71,47 @@ echo "Validating rollback against the org (dry-run)…"
 sf project deploy start --dry-run --ignore-conflicts \
   "${MANIFEST_ARGS[@]}" "${DESTRUCTIVE_ARGS[@]}" \
   --test-level NoTestRun --target-org target-org --wait 60 --json > validate.json || true
-node scripts/deploy/parse-validate-result.mjs validate.json --errors verrors.md
+VAL_OK=true
+node scripts/deploy/parse-validate-result.mjs validate.json --errors verrors.md || VAL_OK=false
 echo "Preview complete." >> "${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+
+# Publish the combined preview for the UI (job stays green — the JSON carries the
+# verdict; a failed validation is a *result* of a preview, not a failed preview).
+if [ -n "${GITHUB_RUN_ID:-}" ]; then
+  CURRENT_SEQ_PUB="$CURRENT_SEQ" VAL_OK_PUB="$VAL_OK" node --input-type=module -e "
+    import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+    const safety = JSON.parse(readFileSync('safety.json','utf8'));
+    const out = {
+      env: process.env.ROLLBACK_ENV,
+      targetSeq: Number(process.env.TARGET_SEQ),
+      currentSeq: Number(process.env.CURRENT_SEQ_PUB),
+      includeDestructive: process.env.INCLUDE_DESTRUCTIVE === 'true',
+      safety,
+      validation: {
+        succeeded: process.env.VAL_OK_PUB === 'true',
+        errors: existsSync('verrors.md') ? readFileSync('verrors.md','utf8') : null,
+      },
+      runId: process.env.GITHUB_RUN_ID,
+      timestamp: new Date().toISOString(),
+    };
+    writeFileSync('preview-full.json', JSON.stringify(out, null, 2) + '\n');
+  "
+  git config user.name "orbitops-bot"
+  git config user.email "orbitops-bot@users.noreply.github.com"
+  for attempt in 1 2 3; do
+    git fetch -q origin orbitops-meta 2>/dev/null || true
+    if git show-ref -q refs/remotes/origin/orbitops-meta; then
+      git worktree add -q .meta origin/orbitops-meta
+    else
+      git worktree add -q --detach .meta
+      git -C .meta checkout -q --orphan orbitops-meta
+      git -C .meta rm -rfq . 2>/dev/null || true
+    fi
+    mkdir -p .meta/rollback-previews
+    cp preview-full.json ".meta/rollback-previews/${GITHUB_RUN_ID}.json"
+    git -C .meta add -A
+    git -C .meta commit -q -m "Rollback preview ${GITHUB_RUN_ID} (${ROLLBACK_ENV} -> seq ${TARGET_SEQ})"
+    if git -C .meta push -q origin HEAD:orbitops-meta; then git worktree remove -f .meta; break; fi
+    git worktree remove -f .meta; echo "meta race, retry $attempt"
+  done
+fi

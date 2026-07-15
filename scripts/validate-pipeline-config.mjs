@@ -54,6 +54,18 @@ if (Array.isArray(config?.pipeline)) {
     });
   }
 }
+if (Array.isArray(config?.devOrgs)) {
+  // Dev orgs may reuse a stage org key (shared org) but must be unique among themselves.
+  for (const key of ["name", "org"]) {
+    const seen = new Map();
+    config.devOrgs.forEach((d, i) => {
+      const v = d?.[key];
+      if (v === undefined) return;
+      if (seen.has(v)) errors.push(`/devOrgs/${i}/${key}: duplicate ${key} "${v}" (first used by devOrgs ${seen.get(v)})`);
+      else seen.set(v, i);
+    });
+  }
+}
 
 if (errors.length) fail(1, errors);
 console.log(`✔ ${configPath} is valid (${config.pipeline.length} stages: ${config.pipeline.map((s) => s.branch).join(" → ")})`);
