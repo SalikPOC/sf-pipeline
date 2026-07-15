@@ -30,15 +30,18 @@ match `environment:` values in `.orbitops/pipeline.yml`):
 | Environment | Required reviewers | Notes |
 |---|---|---|
 | `integration` | none | fast lane for citizen devs |
-| `uat` | release-managers team **+ the OrbitOps UI GitHub App** | |
-| `production` | release-managers team **+ the OrbitOps UI GitHub App** | consider also a wait timer |
+| `uat` | release-managers team | |
+| `production` | release-managers team | consider also a wait timer |
 
-Adding the GitHub App as a required reviewer (search for it by name in the
-reviewers picker) is what lets release managers **approve or reject gated
-releases from inside the OrbitOps UI** — the app records the review with the
-approving user's name in the comment. Approving directly on GitHub keeps
-working either way. The app also needs its **Deployments** permission set to
-*Read and write* (see the UI repo's `docs/GITHUB_APP.md`).
+Release managers can **approve or reject gated releases from inside the
+OrbitOps UI**: the review is made with the signed-in reviewer's own GitHub
+identity (user-to-server token), so whoever approves must be listed as a
+required reviewer here — no extra reviewer entries needed. (GitHub Apps can't
+be required reviewers on personal-account repos, which is why the app itself
+isn't in the list.) One prerequisite: the UI's GitHub App needs its
+**Deployments** permission set to *Read and write* (see the UI repo's
+`docs/GITHUB_APP.md`) and the permission update accepted on the installation.
+Approving directly on GitHub keeps working either way.
 
 ## 4. Org authentication
 
