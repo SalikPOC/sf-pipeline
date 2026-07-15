@@ -1,0 +1,86 @@
+# OrbitOps drift snapshot (REQUIREMENTS.md E9.4): nightly, per environment,
+# retrieve the org's citizen-safe metadata and diff it against the env branch.
+# Differences mean someone changed the org outside the pipeline — surfaced as a
+# "Drift report" issue (closed automatically when drift clears).
+name: OrbitOps Drift Snapshot
+
+on:
+  schedule:
+    - cron: "30 4 * * *" # nightly 04:30 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  drift:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [integration, uat, main]
+    name: Drift check (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Resolve stage
+        id: stage
+        run: node scripts/context/resolve-stage.mjs "${{ matrix.branch }}"
+      - uses: ./.github/actions/sf-auth
+        with:
+          auth-method: ${{ steps.stage.outputs.auth_method }}
+          client-id: ${{ secrets[format('{0}_SF_CLIENT_ID', steps.stage.outputs.org)] }}
+          username: ${{ secrets[format('{0}_SF_USERNAME', steps.stage.outputs.org)] }}
+          jwt-key: ${{ secrets[format('{0}_SF_JWT_KEY', steps.stage.outputs.org)] }}
+          instance-url: ${{ secrets[format('{0}_SF_INSTANCE_URL', steps.stage.outputs.org)] }}
+          auth-url: ${{ secrets[format('{0}_SF_AUTH_URL', steps.stage.outputs.org)] }}
+          alias: target-org
+      - name: Retrieve org state into a branch worktree and diff
+        id: drift
+        run: |
+          set -euo pipefail
+          node scripts/retrieve/source-members.mjs --org target-org --wildcard --out drift-package.xml
+          git worktree add -q wt "origin/${{ matrix.branch }}"
+          cp drift-package.xml wt/
+          (cd wt && sf project retrieve start --manifest drift-package.xml \
+             --target-org target-org --ignore-conflicts --wait 30 --json > /dev/null) || true
+          rm -f wt/drift-package.xml
+          cd wt
+          git add -A force-app
+          if git diff --cached --quiet; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            echo "No drift on ${{ matrix.branch }}."
+          else
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Drift on \`${{ matrix.branch }}\` (org ${{ steps.stage.outputs.org }})"
+              echo ""
+              echo '```'
+              git diff --cached --stat
+              echo '```'
+              echo ""
+              echo "_Someone changed the org outside the pipeline, or a release didn't land fully._"
+              echo "_Nightly check: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}_"
+            } > ../drift-body.md
+          fi
+      - name: Open/update or close the drift issue
+        run: |
+          TITLE="Drift report: ${{ matrix.branch }}"
+          NUM=$(gh issue list --repo "$GITHUB_REPOSITORY" --search "in:title \"$TITLE\"" --state open --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ "${{ steps.drift.outputs.drift }}" = "true" ]; then
+            if [ -n "$NUM" ]; then
+              gh issue edit "$NUM" --repo "$GITHUB_REPOSITORY" --body-file drift-body.md
+            else
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file drift-body.md
+            fi
+          elif [ -n "$NUM" ]; then
+            gh issue close "$NUM" --repo "$GITHUB_REPOSITORY" --comment "Drift cleared by the nightly check."
+          fi

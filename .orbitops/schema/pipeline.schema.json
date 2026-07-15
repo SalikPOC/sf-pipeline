@@ -6,6 +6,24 @@
   "additionalProperties": false,
   "required": ["pipeline"],
   "properties": {
+    "devOrgs": {
+      "type": "array",
+      "description": "Orgs builders can pull changes from (any sandbox/scratch/dev org)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "org", "authMethod"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Display name shown to builders" },
+          "org": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "description": "Org key — prefixes the repo-level auth secrets (<KEY>_SF_AUTH_URL / <KEY>_SF_CLIENT_ID…)"
+          },
+          "authMethod": { "enum": ["jwt", "sfdx-url"] }
+        }
+      }
+    },
     "pipeline": {
       "type": "array",
       "minItems": 1,

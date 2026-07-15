@@ -33,17 +33,47 @@ jobs:
       environment: ${{ steps.stage.outputs.environment }}
       auth_method: ${{ steps.stage.outputs.auth_method }}
       test_level: ${{ steps.stage.outputs.test_level }}
+      has_changes: ${{ steps.precheck.outputs.has_changes }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: { fetch-depth: 0, fetch-tags: true }
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - id: stage
         run: node scripts/context/resolve-stage.mjs "${{ github.ref_name }}"
+      - uses: ./.github/actions/sf-auth
+        with: { auth-method: none } # CLI + sfdx-git-delta only, no org auth
+      - name: Anything to deploy?
+        id: precheck
+        # Decided BEFORE the environment gate: docs/pipeline-code pushes produce
+        # an empty delta and used to sit at the approval gate forever, queueing
+        # every later push behind them (deploy-<env> concurrency group).
+        run: |
+          set -euo pipefail
+          ENV="${{ steps.stage.outputs.environment }}"
+          LAST_TAG=$(git tag -l "deploy/${ENV}/*" | node scripts/deploy/next-seq.mjs "$ENV" --latest)
+          if [ -z "$LAST_TAG" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "First deploy to $ENV — full deploy required"
+            exit 0
+          fi
+          mkdir -p precheck
+          sf sgd source delta --from "$LAST_TAG" --to HEAD --output-dir precheck
+          CHANGED=$(grep -c "<members>" precheck/package/package.xml 2>/dev/null || true)
+          DESTR=$(grep -c "<members>" precheck/destructiveChanges/destructiveChanges.xml 2>/dev/null || true)
+          if [ "${CHANGED:-0}" = "0" ] && [ "${DESTR:-0}" = "0" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No deployable changes since $LAST_TAG — the gated deploy job will be skipped."
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Deployable delta since $LAST_TAG: ${CHANGED:-0} changed, ${DESTR:-0} destructive."
+          fi
 
   deploy:
     name: Deploy to ${{ needs.context.outputs.org }}
     needs: context
+    if: needs.context.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.context.outputs.environment }} # required reviewers gate uat/production
     steps:
@@ -184,6 +214,16 @@ jobs:
           name: workitem-postbacks
           path: workitem-postbacks.json
           if-no-files-found: ignore
+
+      - name: Notify on failure (optional Slack/Teams webhook)
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          [ -z "$WEBHOOK" ] && { echo "No NOTIFY_WEBHOOK_URL secret — skipping."; exit 0; }
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"❌ OrbitOps deploy to ${{ needs.context.outputs.environment }} failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            "$WEBHOOK" || echo "webhook post failed (non-blocking)"
 
       - name: Mark deployment status
         if: always()

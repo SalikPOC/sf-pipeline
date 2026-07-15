@@ -99,6 +99,13 @@ In each Environment (Settings → Environments → <env> → Add secret):
 Environment-level (not repo-level) secrets matter: they're only exposed to jobs
 that pass that environment's gate.
 
+### Optional secrets
+
+| Secret | Level | Purpose |
+|---|---|---|
+| `NOTIFY_WEBHOOK_URL` | repo | Slack/Teams incoming-webhook URL; deploy failures post a message. Absent → silently skipped. |
+| `DEV_*_SF_AUTH_URL` | repo | Created automatically by the UI's "Connect an org" flow (§7). |
+
 ## 6. Org ↔ stage mapping
 
 `.orbitops/pipeline.yml` maps branches to logical org keys and environments.
@@ -115,7 +122,48 @@ Current PoC mapping:
 > --duration-days 30`), redeploy the connected app and update `SF_USERNAME` in the
 > matching environment.
 
-## 7. Roles (PoC: username lists)
+## 7. Registering dev orgs ("Pull my changes" sources)
+
+Builders can pull changes from any sandbox, scratch org, or dev org. There are
+two ways to register one:
+
+### Self-service: "Connect an org" in the UI (preferred)
+
+Settings → **Connect an org** in the OrbitOps UI. The builder signs in on
+Salesforce's own login page (OAuth authorization-code + PKCE against the
+`OrbitOps CI` connected app); the UI exchanges the code server-side, stores the
+resulting SFDX auth URL as a sealed repo secret (`DEV_<NAME>_SF_AUTH_URL`), and
+registers the org in `connected-orgs.json` on the `orbitops-meta` branch. It
+appears in the "Pull my changes" picker immediately. Requirements: the UI's
+GitHub App needs **Secrets: Read and write**, and `SF_OAUTH_CLIENT_ID` must be
+set in the UI's `.env.local` (the connected app's consumer key). Access is
+revocable any time from the org's Connected Apps OAuth Usage page.
+
+### Manual: config + secrets
+
+1. Pick an org key, e.g. `DEV_JANE` (uppercase, prefixes the secrets).
+2. Authenticate to it locally, then store its credentials as **repo-level**
+   secrets: for scratch orgs/sandboxes,
+   `sf org display -o <alias> --verbose --json` → `result.sfdxAuthUrl` →
+   secret `DEV_JANE_SF_AUTH_URL`; for persistent orgs use the JWT secret set
+   (`DEV_JANE_SF_CLIENT_ID`, `_SF_USERNAME`, `_SF_JWT_KEY`, `_SF_INSTANCE_URL`).
+3. Add it to `.orbitops/pipeline.yml`:
+   ```yaml
+   devOrgs:
+     - name: "Jane's dev sandbox"
+       org: DEV_JANE
+       authMethod: sfdx-url
+   ```
+4. It appears in the UI's "Pull my changes" org picker on the next refresh.
+
+Orgs with **source tracking** (scratch orgs, Developer/Developer Pro sandboxes)
+give precise pulls — only what the builder changed. Orgs without it (Developer
+Edition, larger sandboxes) still work: the retrieve falls back to a
+wildcard-by-type manifest of citizen-safe metadata and the git diff filters out
+everything unchanged. Tracked orgs are strongly preferred for shared orgs, where
+wildcard pulls surface everyone's edits.
+
+## 8. Roles (PoC: username lists)
 
 The repo owner `SalikPOC` is a personal account, so GitHub teams are unavailable.
 For the PoC, role mapping is by username:
@@ -129,7 +177,7 @@ For the PoC, role mapping is by username:
 When moving to an org: create `citizen-devs`, `release-managers`,
 `orbitops-admins` teams and switch CODEOWNERS + UI role mapping to team slugs.
 
-## 8. Repo settings checklist
+## 9. Repo settings checklist
 
 - Enable secret scanning + push protection (Settings → Code security)
 - Disallow merge types other than **merge commit** (preserves Work-Items footers)

@@ -1,5 +1,11 @@
 # Salesforce CI/CD Platform for Citizen Developers — Requirements Specification
 
+> **Status (2026-07-15): implemented.** All epics landed in the PoC (E2 as the
+> stub adapter per its PoC-scope note), plus three additions beyond spec:
+> self-service org connection (OAuth + PKCE), a Flow-Builder-style visual flow
+> diff, and per-run live progress in the UI. See [README.md](README.md) for the
+> architecture as built and [docs/RUNBOOK.md](docs/RUNBOOK.md) for operations.
+
 > Working name: **OrbitOps** (rename freely). A DevOps-Center-like experience built on
 > GitHub Actions + Salesforce CLI (`sf`), with work-item traceability (Jira + Azure DevOps),
 > UI-driven rollback, diff/merge visibility, configurable stage gates, and static code analysis.
