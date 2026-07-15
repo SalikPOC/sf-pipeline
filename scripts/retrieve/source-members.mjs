@@ -29,8 +29,8 @@ const flag = (n, d = null) => {
 const org = flag("org");
 const out = flag("out", "retrieve-package.xml");
 
-let records = null; // null = org has no source tracking → wildcard fallback
-try {
+let records = null; // null = no source tracking OR --wildcard → full-type manifest
+if (!process.argv.includes("--wildcard")) try {
   const raw = execFileSync(
     "sf",
     ["data", "query", "--use-tooling-api", "-o", org, "--json", "-q",

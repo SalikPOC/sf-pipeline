@@ -185,6 +185,16 @@ jobs:
           path: workitem-postbacks.json
           if-no-files-found: ignore
 
+      - name: Notify on failure (optional Slack/Teams webhook)
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+        run: |
+          [ -z "$WEBHOOK" ] && { echo "No NOTIFY_WEBHOOK_URL secret — skipping."; exit 0; }
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d "{\"text\":\"❌ OrbitOps deploy to ${{ needs.context.outputs.environment }} failed: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}" \
+            "$WEBHOOK" || echo "webhook post failed (non-blocking)"
+
       - name: Mark deployment status
         if: always()
         run: |
