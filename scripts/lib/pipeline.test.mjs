@@ -40,3 +40,16 @@ test("resolveOrg consults the connected-orgs registry", async () => {
   assert.equal(o.name, "Jane's sandbox");
   assert.throws(() => resolveOrg(cfg, "DEV_JANE"), /Unknown org key/);
 });
+
+test("resolveOrg returns JWT identity for connected jwt entries", async () => {
+  const { loadConfig, resolveOrg } = await import("./pipeline.mjs");
+  const cfg = loadConfig(new URL("../../.orbitops/pipeline.yml", import.meta.url).pathname);
+  const reg = [{
+    name: "Dev1", org: "DEV_DEV1", authMethod: "jwt",
+    username: "test-user@example.com", instanceHost: "acme--dev.sandbox.my.salesforce.com",
+  }];
+  const o = resolveOrg(cfg, "DEV_DEV1", reg);
+  assert.equal(o.authMethod, "jwt");
+  assert.equal(o.username, "test-user@example.com");
+  assert.equal(o.instanceHost, "acme--dev.sandbox.my.salesforce.com");
+});

@@ -141,13 +141,28 @@ two ways to register one:
 
 Settings → **Connect an org** in the OrbitOps UI. The builder signs in on
 Salesforce's own login page (OAuth authorization-code + PKCE against the
-`OrbitOps CI` connected app); the UI exchanges the code server-side, stores the
-resulting SFDX auth URL as a sealed repo secret (`DEV_<NAME>_SF_AUTH_URL`), and
-registers the org in `connected-orgs.json` on the `orbitops-meta` branch. It
-appears in the "Pull my changes" picker immediately. Requirements: the UI's
-GitHub App needs **Secrets: Read and write**, and `SF_OAUTH_CLIENT_ID` must be
-set in the UI's `.env.local` (the connected app's consumer key). Access is
-revocable any time from the org's Connected Apps OAuth Usage page.
+`OrbitOps CI` connected app). The UI stores **no tokens at all** — it records
+only the username and instance host in `connected-orgs.json` on the
+`orbitops-meta` branch. CI then authenticates to the org via the **JWT Bearer
+flow** with the shared OrbitOps CI certificate, acting as that username.
+(Why not stored refresh tokens: Salesforce force-rotates them in all new orgs,
+so a sealed token dies on first use. JWT mints access tokens on demand — there
+is nothing to expire, rotate, or refresh.)
+
+**One-time setup per connected org (admin):** Setup → Connected Apps OAuth
+Usage → `OrbitOps CI` → **Install** → **Manage** → Edit Policies → Permitted
+Users = *Admin approved users are pre-authorized* → save → add the builder's
+profile (e.g. System Administrator) or a permission set. Revocable any time
+from the same page.
+
+**Repo secrets (shared, one-time):** `ORBITOPS_JWT_CLIENT_ID` (the app's
+consumer key) and `ORBITOPS_JWT_KEY` (the certificate's private key — same
+value as `PROD_SF_JWT_KEY`). The UI needs `SF_OAUTH_CLIENT_ID` in `.env.local`.
+
+> Productionization path (decision log 2026-07-15): package the connected app
+> in a **managed package** installed in production — sandboxes inherit it on
+> refresh, scratch orgs install it post-creation, and pre-authorization ships
+> via the package's permission set: fully self-service.
 
 ### Manual: config + secrets
 

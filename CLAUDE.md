@@ -127,3 +127,13 @@ Node ESM scripts with `node --test` units · composite action
   layout and caps it with a synthetic End card; Tailwind utility classes on SVG
   shapes proved unreliable across build modes (unstyled rect renders black) —
   the diagram uses explicit fill/stroke attributes only.
+- 2026-07-15: Connect-an-org v2 = JWT via pre-auth (user's design). Root cause of
+  v1 failures: new orgs FORCE refresh-token rotation (Support-locked setting) —
+  any stored refresh token dies on first use, so sealed-secret auth can never
+  work. v2 stores only {username, instanceHost} in the registry; CI does JWT
+  Bearer with the shared OrbitOps CI cert (repo secrets ORBITOPS_JWT_CLIENT_ID +
+  ORBITOPS_JWT_KEY). Per-org one-time admin step: OAuth Usage → Install →
+  admin-approve + profile. Legacy sfdx-url registry entries still resolve.
+  Long-term (user): managed-package connected app → prod install inherits into
+  refreshed sandboxes, scratch orgs install post-creation → pure self-service.
+  Note: ConnectedApp metadata deploys silently ignore isRefreshTokenRotationEnabled.
