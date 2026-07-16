@@ -10,9 +10,10 @@
   {
     "name": "Dev1",
     "org": "DEV_DEV1",
-    "authMethod": "sfdx-url",
+    "authMethod": "jwt",
+    "username": "test-vxq3xlxqejvo@example.com",
     "connectedBy": "SalikPOC",
-    "connectedAt": "2026-07-15T20:08:51.555Z",
+    "connectedAt": "2026-07-16T11:22:17.014Z",
     "instanceHost": "fun-platform-7050-dev-ed.scratch.my.salesforce.com"
   }
 ]
