@@ -1,0 +1,31 @@
+{
+  "type": "deploy",
+  "env": "integration",
+  "seq": 5,
+  "sha": "3109e994ceee751c41ec1ecc538312ae04499eca",
+  "workItems": [
+    "PROJ-123"
+  ],
+  "components": {
+    "CustomField": [
+      "Contact.Group__c"
+    ],
+    "CustomObject": [
+      "Contact"
+    ],
+    "Layout": [
+      "Contact-Contact %28Marketing%29 Layout",
+      "Contact-Contact %28Sales%29 Layout",
+      "Contact-Contact %28Support%29 Layout",
+      "Contact-Contact Layout"
+    ]
+  },
+  "destructive": {},
+  "componentCount": 6,
+  "destructiveCount": 0,
+  "runUrl": "https://github.com/SalikPOC/sf-pipeline/actions/runs/29498848214",
+  "actor": "orbitops-poc-sfdcdevops[bot]",
+  "timestamp": "2026-07-16T12:39:25Z",
+  "reason": "",
+  "mode": "delta"
+}
