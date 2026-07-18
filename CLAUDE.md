@@ -137,3 +137,33 @@ Node ESM scripts with `node --test` units · composite action
   Long-term (user): managed-package connected app → prod install inherits into
   refreshed sandboxes, scratch orgs install post-creation → pure self-service.
   Note: ConnectedApp metadata deploys silently ignore isRefreshTokenRotationEnabled.
+- 2026-07-17: Topology fully de-hardcoded — stage branches live ONLY in
+  pipeline.yml. deploy.yml/pr-validate.yml trigger broadly (branches-ignore
+  feature/**, orbitops-meta, orbitops/**) and `resolve-stage.mjs --optional`
+  skips non-stage branches (is_stage/is_last_stage outputs gate all jobs);
+  back-promotion pairs derive from config (scripts/context/back-promotion-pairs.mjs);
+  back-promote runs on the LAST stage, whatever it's called. Stages are now
+  added/removed from the OrbitOps Settings UI via config PRs (orbitops-ui
+  TopologyEditor → addStage/removeStage actions; best-effort automates stage
+  branch + GitHub Environment creation, remaining admin steps land as a PR
+  checklist). New stage branches start from their downstream neighbour.
+- 2026-07-17: Reusable-workflow refactor — pipeline logic is now single-source
+  on main. `_pr-validate.yml`/`_deploy.yml` are `workflow_call` workflows
+  holding ALL jobs; `pr-validate.yml`/`deploy.yml` are thin callers pinning
+  `@main` (installed once per stage branch, never edited again). Jobs do a
+  dual checkout: workspace = the branch under validation/deploy, `.pipeline/` =
+  scripts + config + sf-auth from main (config-only scripts run with
+  working-directory .pipeline). Consequence: fixes merged to main apply to
+  every stage immediately — no more per-branch workflow syncing. Check runs
+  are now named "checks / <job>"; the UI strips the prefix (toCheckChips).
+  Rollout order matters: main PR first (creates the `_*.yml`), then the caller
+  stubs onto uat/integration. Pro-code path documented in
+  docs/DEVELOPER_GUIDE.md — the whole process works from plain Git/GitHub;
+  the UI is optional.
+- 2026-07-17: Coverage-gate bug fix — a metadata-only change (no Apex) was
+  wrongly blocked by "No Apex tests ran, but this stage requires ≥ 75%".
+  check-coverage.mjs now takes `--has-apex`; when false, coverage is
+  not-applicable and the gate passes. Apex-present-but-no-coverage still fails.
+  Gate logic extracted to `evaluateCoverage()` with unit tests. pr-validate.yml
+  passes `needs.delta.outputs.has_apex` (same signal that already sets
+  NoTestRun in the validate step).
