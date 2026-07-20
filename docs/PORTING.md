@@ -36,18 +36,35 @@ prep is mechanical (a script) and the enterprise setup is a plain checklist.
 | Salesforce connected app / JWT cert per stage org | Salesforce admin | Org auth (§6) |
 | Team slugs for reviewers/roles | Org admin | Replace username-based roles (§3) |
 
-## 2. Move the code across the wall (git bundle)
+## 2. Move the code across the wall
 
-On **this (personal) machine**, bundle each repo — one file, full history, all
-branches:
+The two machines share **no network path**: the personal machine reaches public
+github.com but not the Bupa org; the work machine reaches the Bupa org but
+**both the EMU account and the corporate network block public/non-corporate
+github.com**. So there is no clone-through — the code moves as a **file**, or
+GitHub moves it **server-side**. Two routes:
+
+### Route A — git bundle (guaranteed; depends on no GitHub feature)
+
+On **this (personal) machine**, bundle each repo — one small file each (no
+`node_modules` in git, so these are only a few MB), full history, all branches:
 
 ```bash
 cd sf-pipeline   && git bundle create ../sf-pipeline.bundle --all && cd ..
 cd orbitops-ui   && git bundle create ../orbitops-ui.bundle --all && cd ..
 ```
 
-Transfer `sf-pipeline.bundle` and `orbitops-ui.bundle` through Bupa's **approved
-file-transfer channel**. On the **work machine**:
+Move the two `.bundle` files to the work machine via a **Bupa-sanctioned
+channel** — confirm which with your team; common ones:
+
+- **Corporate cloud storage** (OneDrive / SharePoint / Box) reachable from both
+  machines — usually the sanctioned path; upload from personal, download on work.
+- **Corporate email** to your work address — small enough to attach, but DLP/AV
+  may quarantine a `.bundle`; if so, `zip` it or rename to `.txt` and rename back.
+- **An approved managed-file-transfer (MFT) portal**, if Bupa provides one.
+- Physical media is usually DLP-blocked on managed machines — don't rely on it.
+
+On the **work machine**:
 
 ```bash
 git clone sf-pipeline.bundle sf-pipeline && cd sf-pipeline
@@ -56,6 +73,30 @@ git remote set-url origin https://github.com/<BUPA_ORG>/sf-pipeline.git
 ```
 
 (Do NOT push yet — rebrand first, §3.)
+
+### Route B — GitHub Enterprise Importer (server-side; no file to move)
+
+GEI (`gh gei`) migrates repos **GitHub-to-GitHub on GitHub's own
+infrastructure**, so the block on the *work machine* reaching public github.com
+doesn't apply — the CLI only calls the github.com API (which the work machine
+can), and GitHub fetches the source itself. Worth raising with your GitHub admin
+because it also brings history/PRs/issues cleanly. Caveats to check first:
+
+- GEI github.com sources must be an **organization**, not a user account — so
+  first transfer `SalikPOC/sf-pipeline` and `orbitops-ui` into a free github.com
+  **org** on the personal side, then GEI from that org into the Bupa enterprise.
+- **EMU import must be permitted** by enterprise policy, and source commit
+  authors become **mannequins** you map to EMU users afterward.
+- Needs a source PAT (SSO-authorized) + Bupa org-owner rights.
+
+If GEI is allowed, it's the cleaner one-shot; if not, Route A always works.
+
+### Either way, this hop happens **once**
+
+After the initial seed into the Bupa org, everything lives inside the corporate
+environment. Future changes never cross the boundary again — they're ordinary
+PRs in the Bupa repo, assisted by Copilot (§10). This is a one-time migration,
+not an ongoing sync.
 
 ## 3. Rebrand the code (one script, machine-independent)
 
