@@ -9,6 +9,7 @@ can back out any release with a previewed, validate-first rollback.
 - **Spec**: [REQUIREMENTS.md](REQUIREMENTS.md) (epics E1–E9, decisions D1–D9)
 - **Platform-owner setup**: [docs/SETUP.md](docs/SETUP.md)
 - **Operations**: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- **Release cycle overview (UI ↔ Git, side by side)**: [docs/RELEASE_CYCLE.md](docs/RELEASE_CYCLE.md)
 - **Builder walkthrough (UI path)**: [docs/CITIZEN_GUIDE.md](docs/CITIZEN_GUIDE.md)
 - **Pro-code walkthrough (plain Git/GitHub path)**: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
 - **Work-item conventions**: [docs/WORKITEMS.md](docs/WORKITEMS.md)
@@ -113,6 +114,6 @@ the map in [docs/RUNBOOK.md](docs/RUNBOOK.md)).
 .github/actions/      sf-auth composite action (CLI install + org auth)
 scripts/              context/ deploy/ retrieve/ rollback/ scanner/ workitems/ lib/ — all workflow logic (npm test)
 force-app/            SFDX source (sample BUP_* objects, flows, classes)
-docs/                 SETUP, RUNBOOK, CITIZEN_GUIDE, DEVELOPER_GUIDE, WORKITEMS
+docs/                 SETUP, RUNBOOK, RELEASE_CYCLE, CITIZEN_GUIDE, DEVELOPER_GUIDE, WORKITEMS
 AGENTS.md             brief for AI coding tools · CLAUDE.md — dated decision log
 ```
